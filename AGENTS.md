@@ -30,6 +30,7 @@
 npm install
 npm run dev            # watch
 npm run build          # type-check + production bundle
+npm run test           # unit tests (node:test, bundled with esbuild)
 npm run lint
 npm run check:manifest
 npm run deploy -- <vault-path>
@@ -101,8 +102,14 @@ call `detachLeavesOfType` from `onunload`.
   **Settings → Community plugins**.
 - `npm run deploy -- <vault-path>` does the copy and then verifies the files
   landed byte for byte.
-- There is no test runner yet. If logic with real invariants appears (parsing,
-  scheduling, anything with dates), add one rather than testing by hand.
+- Unit tests are `*.test.ts` next to the source they cover, run by
+  `npm test` (`scripts/test.mjs` — esbuild bundles them, `node:test` runs them;
+  no framework). They only ever cover modules with no Obsidian side effects,
+  because nothing else can run outside the app. **New parsing or scheduling
+  logic gets a test here rather than a one-off script in `/tmp`.**
+- Anything that only a running Obsidian can settle gets written down as an open
+  question instead — see `docs/board-spike.md`, which keeps the verified and
+  unverified lists apart on purpose.
 
 ## Security, privacy, and compliance
 

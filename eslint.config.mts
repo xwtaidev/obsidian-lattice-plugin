@@ -33,4 +33,21 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		// Tests run under Node, never inside Obsidian, so the rules that keep
+		// the plugin bundle free of Node built-ins describe nothing they do.
+		// The floating-promise rule goes with them: `it(...)` returns a promise
+		// that belongs to the test runner, which is the one thing supposed to
+		// await it.
+		files: ['**/*.test.ts'],
+		languageOptions: {
+			globals: {
+				...globals.node,
+			},
+		},
+		rules: {
+			'obsidianmd/no-nodejs-modules': 'off',
+			'@typescript-eslint/no-floating-promises': 'off',
+		},
+	},
 );
