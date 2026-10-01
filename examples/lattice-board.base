@@ -27,6 +27,10 @@ views:
     name: Board
     latticeGroupBy: note.status
     latticeShowPropertyNames: true
+    # The card shows the note's opening paragraph under its title, clamped to
+    # two lines. Bases has no property for a note body, so Lattice reads it
+    # itself; set this to false on a board where that line is just noise.
+    latticeShowDescription: true
     # The card always renders the file basename as its title, so listing
     # `file.name` here would only print it a second time.
     order:

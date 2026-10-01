@@ -77,6 +77,8 @@ const markers = [
 	'.lattice-column-grip',
 	'.lattice-column.is-drop-before',
 	'.lattice-card-row-value',
+	'.lattice-card-description',
+	'.lattice-label',
 ];
 const missing = markers.filter((marker) => !styles.includes(marker));
 if (missing.length > 0) {

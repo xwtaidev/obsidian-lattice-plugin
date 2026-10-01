@@ -32,6 +32,16 @@ export const OPTION_GROUP_BY = 'latticeGroupBy';
 export const OPTION_SHOW_PROPERTY_NAMES = 'latticeShowPropertyNames';
 
 /**
+ * Whether a card carries the note's opening paragraph under its title.
+ *
+ * Bases has no property that holds a note's body, so this is the one thing on
+ * a card that Lattice reads for itself rather than asking the query for. It is
+ * a view option like the other two so a board full of notes that open with a
+ * heading and nothing else can turn the blank line off.
+ */
+export const OPTION_SHOW_DESCRIPTION = 'latticeShowDescription';
+
+/**
  * Column state, written by `BasesViewConfig.set` after the user moves or
  * deletes a column rather than declared in `BasesViewRegistration.options`.
  *

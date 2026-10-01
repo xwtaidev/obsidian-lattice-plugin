@@ -3,6 +3,7 @@ import {
 	LATTICE_BASES_VIEW_TYPE,
 	LATTICE_ICON,
 	OPTION_GROUP_BY,
+	OPTION_SHOW_DESCRIPTION,
 	OPTION_SHOW_PROPERTY_NAMES,
 } from '../constants';
 import type LatticePlugin from '../main';
@@ -32,6 +33,12 @@ export function registerLatticeBasesView(plugin: LatticePlugin): boolean {
 				type: 'toggle',
 				key: OPTION_SHOW_PROPERTY_NAMES,
 				displayName: 'Show property names',
+				default: true,
+			},
+			{
+				type: 'toggle',
+				key: OPTION_SHOW_DESCRIPTION,
+				displayName: 'Show note description',
 				default: true,
 			},
 		],

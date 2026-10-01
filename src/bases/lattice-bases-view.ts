@@ -1,5 +1,5 @@
 import { BasesView, Menu, TFile, setIcon } from 'obsidian';
-import type { BasesEntry, BasesPropertyId, QueryController } from 'obsidian';
+import type { BasesEntry, BasesPropertyId, QueryController, WorkspaceLeaf } from 'obsidian';
 import {
 	LATTICE_BASES_VIEW_TYPE,
 	LATTICE_CARD_DRAG_TYPE,
@@ -7,9 +7,12 @@ import {
 	OPTION_COLUMN_ORDER,
 	OPTION_GROUP_BY,
 	OPTION_REMOVED_COLUMNS,
+	OPTION_SHOW_DESCRIPTION,
 	OPTION_SHOW_PROPERTY_NAMES,
 } from '../constants';
 import { ConfirmModal } from '../ui/confirm-modal';
+import { extractDescription } from './description';
+import { ValuePalette } from './value-colors';
 import {
 	buildColumns,
 	columnKey,
@@ -80,6 +83,21 @@ interface ColumnHit {
 }
 
 /**
+ * A note's description, and what it was read from.
+ *
+ * Reading a note body is a disk read, and the board redraws on every change to
+ * the query, so the text is kept and checked against the file's stat rather
+ * than read again. `text` is `null` for a note that has nothing to summarise —
+ * caching that too is what stops such a note from being re-read on every
+ * redraw, which would be the most expensive way to keep showing nothing.
+ */
+interface DescriptionEntry {
+	mtime: number;
+	size: number;
+	text: string | null;
+}
+
+/**
  * The board, as a Bases view.
  *
  * The spike answers one question: can Bases carry a wolai-style board, or does
@@ -109,6 +127,35 @@ export class LatticeBasesView extends BasesView {
 	private drawnGroupBy: BasesPropertyId | null = null;
 
 	/**
+	 * Colours for the values currently on the board.
+	 *
+	 * Replaced on every render rather than carried over, so a value that has
+	 * left the data stops holding a colour the values still on the board could
+	 * be using. See `ValuePalette`.
+	 */
+	private palette = new ValuePalette();
+
+	/**
+	 * Descriptions read out of note bodies, keyed by path.
+	 *
+	 * Kept across renders because the read is a disk access and a redraw is
+	 * triggered by anything from a keystroke in another pane to a card being
+	 * dropped. Bounded by the notes this board has actually shown.
+	 */
+	private readonly descriptions = new Map<string, DescriptionEntry>();
+
+	/**
+	 * Which render is current.
+	 *
+	 * A description arrives after the board has already been drawn, and the
+	 * render after that one may have replaced the element it was going to be
+	 * written into. The number is how a late answer tells that it is stale: the
+	 * card that asked for it is gone, and the card that replaced it is asking
+	 * for the same thing.
+	 */
+	private renderGeneration = 0;
+
+	/**
 	 * The one element currently wearing each drop affordance.
 	 *
 	 * One at a time, because only one column can be under the pointer — and
@@ -119,6 +166,15 @@ export class LatticeBasesView extends BasesView {
 	private cardDropTargetEl: HTMLElement | null = null;
 	private columnIndicatorEl: HTMLElement | null = null;
 	private columnIndicatorClass: string | null = null;
+
+	/**
+	 * The right-sidebar leaf the last card opened in.
+	 *
+	 * Held on to rather than asking the workspace for the active sidebar leaf,
+	 * so opening a card does not take over a panel the user put there. Once the
+	 * user closes it the reference is stale, which `drawerLeafInUse` detects.
+	 */
+	private drawerLeaf: WorkspaceLeaf | null = null;
 
 	constructor(controller: QueryController, containerEl: HTMLElement) {
 		super(controller);
@@ -141,11 +197,16 @@ export class LatticeBasesView extends BasesView {
 		const root = this.containerEl;
 		root.empty();
 		root.classList.add('lattice-board');
+		this.renderGeneration += 1;
 
 		// Whatever these pointed at went with the DOM.
 		this.cardDropTargetEl = null;
 		this.columnIndicatorEl = null;
 		this.columnIndicatorClass = null;
+
+		// Colours are handed out in draw order, so they are drawn again with the
+		// board they belong to.
+		this.palette = new ValuePalette();
 
 		const groupBy = this.config.getAsPropertyId(OPTION_GROUP_BY);
 		if (groupBy !== this.drawnGroupBy) {
@@ -194,7 +255,7 @@ export class LatticeBasesView extends BasesView {
 		this.renderColumnGrip(header, columnEl, column, key);
 		// Name and count read as one label, so they sit together; the far edge of
 		// the header belongs to the actions.
-		header.createSpan({ cls: 'lattice-column-title', text: column.label });
+		this.renderColumnTitle(header, column);
 		header.createSpan({ cls: 'lattice-column-count', text: String(column.entries.length) });
 
 		const actions = header.createDiv({ cls: 'lattice-column-actions' });
@@ -207,6 +268,21 @@ export class LatticeBasesView extends BasesView {
 		}
 
 		return columnEl;
+	}
+
+	/**
+	 * The column name, as a tag when it names a value.
+	 *
+	 * `No value` and `All notes` name the absence of a value, so they stay
+	 * plain: a colour on them would claim a meaning the column does not have.
+	 * Everything else is a value the notes actually carry, and it gets the same
+	 * colour here that the same value gets anywhere else on the board.
+	 */
+	private renderColumnTitle(header: HTMLElement, column: LatticeColumn): void {
+		const title = header.createSpan({ cls: 'lattice-column-title', text: column.label });
+		if (column.value !== null) {
+			title.addClass('lattice-label', this.palette.classFor(column.value));
+		}
 	}
 
 	/**
@@ -413,16 +489,30 @@ export class LatticeBasesView extends BasesView {
 	): HTMLElement {
 		const card = createDiv({ cls: 'lattice-card' });
 		card.draggable = true;
-		card.createDiv({ cls: 'lattice-card-title', text: entry.file.basename });
+
+		// The title and the description are one block rather than two rows: the
+		// description is the second half of what the title says, so it sits
+		// closer to the title than the properties do.
+		const head = card.createDiv({ cls: 'lattice-card-head' });
+		head.createDiv({ cls: 'lattice-card-title', text: entry.file.basename });
+		if (this.config.get(OPTION_SHOW_DESCRIPTION) !== false) {
+			this.renderDescription(head, entry.file);
+		}
 
 		const showNames = this.config.get(OPTION_SHOW_PROPERTY_NAMES) !== false;
-		for (const propertyId of this.config.getOrder()) {
-			// The column header already shows the grouping value; repeating it on
-			// every card in that column is noise.
-			if (propertyId === groupBy) {
-				continue;
+		// The grouping value is left out: the column header already says it, and
+		// repeating it on every card in the column is noise.
+		const properties = this.config
+			.getOrder()
+			.filter((propertyId) => propertyId !== groupBy);
+		if (properties.length > 0) {
+			// A wrapper rather than rows hanging off the card, so the gap between
+			// the title and the properties can differ from the gap between one
+			// property and the next.
+			const fields = card.createDiv({ cls: 'lattice-card-fields' });
+			for (const propertyId of properties) {
+				this.renderCardRow(fields, entry, propertyId, showNames);
 			}
-			this.renderCardRow(card, entry, propertyId, showNames);
 		}
 
 		card.addEventListener('dragstart', (event) => {
@@ -442,23 +532,170 @@ export class LatticeBasesView extends BasesView {
 			this.finishDrag(card);
 		});
 		card.addEventListener('click', (event) => {
-			void this.app.workspace.openLinkText(
-				entry.file.path,
-				'',
-				event.ctrlKey || event.metaKey,
-			);
+			void this.openCard(entry, event);
 		});
 
 		return card;
 	}
 
+	/**
+	 * The note's opening paragraph, under the title.
+	 *
+	 * Bases cannot hand a view the body of a note, so this is read from the
+	 * markdown itself — off the main thread's critical path, and only once per
+	 * edit; see `description.ts` for what comes out of it.
+	 *
+	 * The element is appended when the text arrives rather than reserved before
+	 * it. A card whose note has nothing to summarise would otherwise carry an
+	 * empty line, and a flex column charges its gap for that line even at zero
+	 * height, so the card would be taller for saying nothing.
+	 */
+	private renderDescription(head: HTMLElement, file: TFile): void {
+		const known = this.describe(file);
+		if (known !== undefined) {
+			if (known !== null) {
+				head.createDiv({ cls: 'lattice-card-description', text: known });
+			}
+			return;
+		}
+
+		const generation = this.renderGeneration;
+		void this.app.vault
+			.cachedRead(file)
+			.then((markdown) => {
+				const text = extractDescription(markdown);
+				this.descriptions.set(file.path, {
+					mtime: file.stat.mtime,
+					size: file.stat.size,
+					text,
+				});
+
+				// The board was redrawn while this was being read, so the head
+				// it was meant for is detached and its replacement is already
+				// showing the same text.
+				if (generation !== this.renderGeneration || !head.isConnected) {
+					return;
+				}
+
+				if (text !== null) {
+					head.createDiv({ cls: 'lattice-card-description', text });
+				}
+			})
+			.catch(() => {
+				// A note that cannot be read has no description. Caching the
+				// miss is what stops every redraw from retrying a read that
+				// already failed.
+				this.descriptions.set(file.path, {
+					mtime: file.stat.mtime,
+					size: file.stat.size,
+					text: null,
+				});
+			});
+	}
+
+	/**
+	 * The description already read for a note.
+	 *
+	 * `undefined` is "not read yet" and `null` is "read, and there is nothing
+	 * to show". They have to stay apart: only the first one should send the
+	 * card back to the vault. Both the stat fields are compared, because a note
+	 * saved twice within the resolution of one clock still grew or shrank.
+	 */
+	private describe(file: TFile): string | null | undefined {
+		const entry = this.descriptions.get(file.path);
+		if (entry === undefined) {
+			return undefined;
+		}
+
+		if (entry.mtime !== file.stat.mtime || entry.size !== file.stat.size) {
+			return undefined;
+		}
+
+		return entry.text;
+	}
+
+	/**
+	 * A card click previews the note in the right sidebar instead of opening it
+	 * over the board.
+	 *
+	 * The board is something you read from, and a board opened in the main area
+	 * is the tab you are reading it in — opening a card there replaces the board
+	 * with one of its own rows. The sidebar is the drawer: it collapses, it can
+	 * be dragged wider, and its tab can be dragged into the main area when the
+	 * note turns out to be worth a full page.
+	 */
+	private async openCard(entry: BasesEntry, event: MouseEvent): Promise<void> {
+		// A card's values are links in their own right — tags, links, dates. A
+		// click on one belongs to that link, so let it through untouched rather
+		// than opening the card's note over the top of it.
+		if (((event.target as Element | null)?.closest?.('a') ?? null) !== null) {
+			return;
+		}
+
+		// Cmd/Ctrl keeps Obsidian's own meaning: somewhere else, which here is a
+		// tab in the main area.
+		if (event.ctrlKey || event.metaKey) {
+			await this.app.workspace.openLinkText(entry.file.path, '', 'tab');
+			return;
+		}
+
+		await this.openPreview(entry.file);
+	}
+
+	/**
+	 * Open a note in the right sidebar, reusing a single leaf.
+	 *
+	 * Reusing, rather than splitting, is the difference between a preview and a
+	 * pile: clicking through a board should leave one panel behind, not one per
+	 * card. It is also why the leaf is remembered instead of borrowed from the
+	 * sidebar — a preview must not land on top of a panel the user opened there
+	 * themselves.
+	 */
+	private async openPreview(file: TFile): Promise<void> {
+		const leaf = this.drawerLeafInUse() ?? this.app.workspace.getRightLeaf(false);
+		if (leaf === null) {
+			return;
+		}
+
+		this.drawerLeaf = leaf;
+		await leaf.openFile(file);
+		await this.app.workspace.revealLeaf(leaf);
+	}
+
+	/**
+	 * The remembered drawer leaf, or `null` once it is gone.
+	 *
+	 * A leaf the user closed is dead, and opening a note in it would show
+	 * nothing, so the reference is dropped and the next click falls back to the
+	 * sidebar's own leaf.
+	 */
+	private drawerLeafInUse(): WorkspaceLeaf | null {
+		const remembered = this.drawerLeaf;
+		if (remembered === null) {
+			return null;
+		}
+
+		let alive = false;
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (leaf === remembered) {
+				alive = true;
+			}
+		});
+
+		if (!alive) {
+			this.drawerLeaf = null;
+		}
+
+		return alive ? remembered : null;
+	}
+
 	private renderCardRow(
-		card: HTMLElement,
+		parent: HTMLElement,
 		entry: BasesEntry,
 		propertyId: BasesPropertyId,
 		showName: boolean,
 	): void {
-		const row = card.createDiv({ cls: 'lattice-card-row' });
+		const row = parent.createDiv({ cls: 'lattice-card-row' });
 		if (showName) {
 			row.createSpan({
 				cls: 'lattice-card-row-name',
@@ -482,6 +719,39 @@ export class LatticeBasesView extends BasesView {
 		valueEl.querySelectorAll('a').forEach((anchor) => {
 			anchor.draggable = false;
 		});
+		this.colorValue(valueEl);
+	}
+
+	/**
+	 * Give a value its colour.
+	 *
+	 * A tag comes out of `renderTo` already looking like a pill, one per tag, so
+	 * each gets a colour of its own and the row is left to wrap. A value that
+	 * came out as plain text is the value, so the whole span becomes the pill —
+	 * and it has to be the span, because the row clips what overflows it and the
+	 * padding of an inline child is painted outside its own line box.
+	 *
+	 * Anything else — a link, a date — is left exactly as Obsidian drew it. It
+	 * is already telling the reader what it is.
+	 */
+	private colorValue(valueEl: HTMLElement): void {
+		const tags = valueEl.querySelectorAll('.tag');
+		if (tags.length > 0) {
+			valueEl.addClass('has-tags');
+			tags.forEach((tag) => {
+				tag.addClass(this.palette.classFor(tag.textContent ?? ''));
+			});
+			return;
+		}
+
+		if (valueEl.childElementCount > 0) {
+			return;
+		}
+
+		const text = valueEl.textContent;
+		if (text !== null && text.length > 0) {
+			valueEl.addClass('is-chip', this.palette.classFor(text));
+		}
 	}
 
 	/**

@@ -48,9 +48,13 @@
 .lattice-column {
 	position: relative; /* anchor for the column-drop rule */
 	flex: 0 0 240px;
+	/* The width above is the width, full stop. A flex item's automatic minimum
+	   size is its content's, which beats the basis: one card whose description
+	   is a long unbroken URL would otherwise widen every column on the board. */
+	min-width: 0;
 	display: flex;
 	flex-direction: column;
-	gap: var(--size-4-2);
+	gap: var(--size-4-3);
 	padding: var(--size-4-2);
 	border: 1px solid transparent;
 	border-radius: var(--radius-m);
@@ -121,7 +125,7 @@
 }
 
 .lattice-column-title {
-	font-weight: var(--font-semibold);
+	font-weight: var(--font-medium);
 	color: var(--text-normal);
 }
 
@@ -133,17 +137,20 @@
 .lattice-column-cards {
 	display: flex;
 	flex-direction: column;
-	gap: var(--size-4-1);
+	gap: var(--size-4-2);
 	min-height: var(--size-4-4);
 }
 
+/* Taller than it looks it should be. A card is a title, the note's own opening
+   line, and a line or two of properties, and at 8px of padding with 2px between
+   lines the properties read as a grey block rather than as separate facts. */
 .lattice-card {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
-	padding: var(--size-4-2);
+	gap: var(--size-4-2);
+	padding: var(--size-4-3);
 	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-s);
+	border-radius: var(--radius-m);
 	background-color: var(--background-primary);
 	cursor: grab;
 }
@@ -156,16 +163,56 @@
 	opacity: 0.5;
 }
 
+/* Title and description are one block, so the description reads as the second
+   half of the title rather than as the first of the properties. */
+.lattice-card-head {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	min-width: 0;
+}
+
 .lattice-card-title {
 	font-weight: var(--font-medium);
 	color: var(--text-normal);
+	line-height: var(--line-height-tight);
+}
+
+/* The note's opening paragraph, held to two lines.
+   Past the second line the box clips the text and marks the cut with an
+   ellipsis, which is what makes a card a summary rather than a preview: the
+   line is there to be recognised, and two lines is as much as fits under a
+   title before the properties are pushed out of sight.
+   The `-webkit-box` display is the only way to clamp by line rather than by
+   character, and Obsidian is Electron, so the prefix is load bearing rather
+   than a fallback.
+   `anywhere` rather than `break-word` because the two differ in exactly the
+   case that matters here: a URL or an identifier run through the note has no
+   space to break at, and only `anywhere` lets it break without dragging the
+   column's minimum width out with it. */
+.lattice-card-description {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	overflow: hidden;
+	overflow-wrap: anywhere;
+	font-size: var(--font-ui-smaller);
+	line-height: var(--line-height-normal);
+	color: var(--text-muted);
+}
+
+.lattice-card-fields {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
 }
 
 .lattice-card-row {
 	display: flex;
 	align-items: baseline;
-	gap: var(--size-4-1);
+	gap: var(--size-4-2);
 	font-size: var(--font-ui-smaller);
+	line-height: var(--line-height-normal);
 }
 
 .lattice-card-row-name {
@@ -183,4 +230,95 @@
 
 .lattice-card-row-value.is-empty {
 	color: var(--text-faint);
+}
+
+/* ==============================================================================
+   Labels
+
+   Short strings mean the same thing every time they appear on this board — a
+   column name, a tag, a value like `High` — and colour is what lets them be
+   scanned rather than read one by one. The eight colours are Obsidian's own,
+   taken from the -rgb variables it already defines, so they follow the theme in
+   light and dark instead of being tuned for one of them.
+
+   The hue class is put on the element that displays the value, so the same
+   string is the same colour in a column header and on every card below it.
+   ============================================================================== */
+
+.lattice-hue-0 {
+	--lattice-hue: var(--color-red-rgb);
+}
+
+.lattice-hue-1 {
+	--lattice-hue: var(--color-orange-rgb);
+}
+
+.lattice-hue-2 {
+	--lattice-hue: var(--color-yellow-rgb);
+}
+
+.lattice-hue-3 {
+	--lattice-hue: var(--color-green-rgb);
+}
+
+.lattice-hue-4 {
+	--lattice-hue: var(--color-cyan-rgb);
+}
+
+.lattice-hue-5 {
+	--lattice-hue: var(--color-blue-rgb);
+}
+
+.lattice-hue-6 {
+	--lattice-hue: var(--color-purple-rgb);
+}
+
+.lattice-hue-7 {
+	--lattice-hue: var(--color-pink-rgb);
+}
+
+/* Padding and radius are Obsidian's tag metrics, so a value that is a tag and a
+   value that merely looks like one come out the same size. */
+.lattice-label,
+.lattice-card-row-value.is-chip {
+	display: block;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	padding: var(--tag-padding-y) var(--tag-padding-x);
+	border-radius: var(--tag-radius);
+	background-color: rgba(var(--lattice-hue), 0.15);
+	color: rgb(var(--lattice-hue));
+	font-weight: var(--font-medium);
+	line-height: var(--line-height-tight);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* A column title that names a value wears the pill too. Two classes, not one,
+   so this beats .lattice-column-title on specificity rather than on the order
+   the two rules happen to sit in this file. The header is not a card, so its
+   pill is set at the header's own size. */
+.lattice-column-title.lattice-label {
+	font-size: var(--font-ui-small);
+	color: rgb(var(--lattice-hue));
+	background-color: rgba(var(--lattice-hue), 0.15);
+}
+
+/* A row whose value is a list of tags wraps instead of being cut off, and each
+   tag takes its own colour. Every tag is its own value, so they cannot share
+   the hue the row would otherwise have carried. */
+.lattice-card-row-value.has-tags {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-4-1);
+	overflow: visible;
+	white-space: normal;
+}
+
+.lattice-card-row-value.has-tags .tag {
+	--tag-color: rgb(var(--lattice-hue));
+	--tag-background: rgba(var(--lattice-hue), 0.15);
+	--tag-color-hover: rgb(var(--lattice-hue));
+	--tag-background-hover: rgba(var(--lattice-hue), 0.25);
 }
