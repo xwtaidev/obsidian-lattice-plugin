@@ -1,4 +1,5 @@
 import { Plugin, WorkspaceLeaf } from 'obsidian';
+import { registerLatticeBasesView } from './bases/register';
 import { registerCommands } from './commands';
 import { LATTICE_ICON, VIEW_TYPE_LATTICE } from './constants';
 import { DEFAULT_SETTINGS, LatticeSettingTab, type LatticeSettings } from './settings';
@@ -18,6 +19,8 @@ export default class LatticePlugin extends Plugin {
 		await this.loadSettings();
 
 		this.registerView(VIEW_TYPE_LATTICE, (leaf: WorkspaceLeaf) => new LatticeView(leaf, this));
+
+		registerLatticeBasesView(this);
 
 		this.addRibbonIcon(LATTICE_ICON, 'Open lattice view', () => {
 			void this.activateView();

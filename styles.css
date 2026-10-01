@@ -10,6 +10,12 @@
 	padding: var(--size-4-4);
 }
 
+.lattice-view-hint {
+	margin: 0 0 var(--size-4-4);
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+}
+
 .lattice-grid {
 	display: grid;
 	grid-template-columns: repeat(var(--lattice-columns, 3), minmax(0, 1fr));
@@ -21,4 +27,160 @@
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background-color: var(--background-secondary);
+}
+
+/* ==============================================================================
+   The board (Bases view)
+   ============================================================================== */
+
+.lattice-board {
+	overflow-x: auto;
+	padding: var(--size-4-2) 0;
+}
+
+.lattice-board-columns {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--size-4-3);
+	padding: 0 var(--size-4-2);
+}
+
+.lattice-column {
+	position: relative; /* anchor for the column-drop rule */
+	flex: 0 0 240px;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-2);
+	padding: var(--size-4-2);
+	border: 1px solid transparent;
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
+}
+
+/* A card is about to land somewhere in here. */
+.lattice-column.is-card-drop-target {
+	border-color: var(--interactive-accent);
+	background-color: var(--background-secondary-alt);
+}
+
+/* This column itself is the thing being dragged. */
+.lattice-column.is-dragging {
+	opacity: 0.5;
+}
+
+/* Where a dragged column would be inserted. A rule in the gap between columns,
+   not a lit-up column: dropping a column is about position, and the two drags
+   must not look alike. */
+.lattice-column.is-drop-before::before,
+.lattice-column.is-drop-after::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 2px;
+	border-radius: 1px;
+	background-color: var(--interactive-accent);
+}
+
+.lattice-column.is-drop-before::before {
+	left: calc(var(--size-4-3) / -2 - 1px);
+}
+
+.lattice-column.is-drop-after::before {
+	right: calc(var(--size-4-3) / -2 - 1px);
+}
+
+.lattice-column-header {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+}
+
+.lattice-column-grip {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	--icon-size: var(--icon-s);
+	color: var(--text-faint);
+	cursor: grab;
+}
+
+.lattice-column-grip:hover {
+	color: var(--text-muted);
+}
+
+/* The far edge belongs to the actions, so name + count read as one label. */
+.lattice-column-actions {
+	display: flex;
+	align-items: center;
+	margin-left: auto;
+}
+
+.lattice-column-action {
+	--icon-size: var(--icon-s);
+}
+
+.lattice-column-title {
+	font-weight: var(--font-semibold);
+	color: var(--text-normal);
+}
+
+.lattice-column-count {
+	font-size: var(--font-ui-smaller);
+	color: var(--text-faint);
+}
+
+.lattice-column-cards {
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	min-height: var(--size-4-4);
+}
+
+.lattice-card {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	padding: var(--size-4-2);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	background-color: var(--background-primary);
+	cursor: grab;
+}
+
+.lattice-card:hover {
+	border-color: var(--background-modifier-border-hover);
+}
+
+.lattice-card.is-dragging {
+	opacity: 0.5;
+}
+
+.lattice-card-title {
+	font-weight: var(--font-medium);
+	color: var(--text-normal);
+}
+
+.lattice-card-row {
+	display: flex;
+	align-items: baseline;
+	gap: var(--size-4-1);
+	font-size: var(--font-ui-smaller);
+}
+
+.lattice-card-row-name {
+	flex: 0 0 auto;
+	color: var(--text-faint);
+}
+
+.lattice-card-row-value {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-muted);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.lattice-card-row-value.is-empty {
+	color: var(--text-faint);
 }

@@ -1,0 +1,33 @@
+# A minimal base for trying the Lattice board view.
+#
+# Copy this file into your vault (any folder will do), then open it. The view
+# entry below already asks for `lattice-board`; if the plugin is enabled and
+# installed, the board renders instead of a table.
+#
+# The filter keeps the board to notes tagged `task`. Change or delete it to see
+# more of the vault.
+#
+# `latticeGroupBy` is Lattice's own option key, and the prefix is deliberate:
+# `groupBy`, `order`, `filters`, `summaries` and `limit` belong to the core
+# Bases plugin, and the Bases syntax reference asks plugin views not to collide
+# with core keys.
+
+filters:
+  and:
+    - file.hasTag("task")
+
+properties:
+  status:
+    displayName: Status
+  priority:
+    displayName: Priority
+
+views:
+  - type: lattice-board
+    name: Board
+    latticeGroupBy: note.status
+    latticeShowPropertyNames: true
+    # The card always renders the file basename as its title, so listing
+    # `file.name` here would only print it a second time.
+    order:
+      - note.priority

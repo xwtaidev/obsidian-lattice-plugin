@@ -44,6 +44,14 @@ export class LatticeView extends ItemView {
 		const { contentEl } = this;
 		contentEl.empty();
 
+		// This view owns no data, so a bare grid of empty cells reads as
+		// "broken" rather than "not built yet". Say which one it is — the board
+		// lives in Bases, and nothing on screen would otherwise say so.
+		contentEl.createEl('p', {
+			cls: 'lattice-view-hint',
+			text: 'Placeholder view. Lattice renders boards as a Bases view — open a .base file and choose Lattice from its view menu.',
+		});
+
 		const grid = contentEl.createDiv({ cls: 'lattice-grid' });
 		grid.style.setProperty('--lattice-columns', String(this.plugin.settings.columns));
 

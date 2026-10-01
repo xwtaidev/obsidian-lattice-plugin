@@ -2,7 +2,7 @@
 	"id": "lattice",
 	"name": "Lattice",
 	"version": "0.1.0",
-	"minAppVersion": "1.7.2",
+	"minAppVersion": "1.10.2",
 	"description": "Placeholder description. Replace this with a one line summary of what Lattice does.",
 	"author": "xwtaidev",
 	"isDesktopOnly": false
