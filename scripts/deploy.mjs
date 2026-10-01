@@ -72,10 +72,11 @@ for (const entry of copied) {
 // obvious rather than a silent visual regression.
 const styles = readFileSync(join(target, 'styles.css'), 'utf8');
 const markers = [
-	'--ws-heat-0',
-	'aspect-ratio',
-	'weekly-schedule-carry-tag-q1',
-	'weekly-schedule-day-carry',
+	'.lattice-board-columns',
+	'.lattice-column.is-card-drop-target',
+	'.lattice-column-grip',
+	'.lattice-column.is-drop-before',
+	'.lattice-card-row-value',
 ];
 const missing = markers.filter((marker) => !styles.includes(marker));
 if (missing.length > 0) {
