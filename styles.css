@@ -1,0 +1,24 @@
+/* ==============================================================================
+   Lattice — styles
+   Everything here is built on Obsidian's own CSS variables (--text-normal,
+   --background-modifier-border, --radius-s, ...), so the plugin follows whatever
+   theme the vault is running instead of hard-coding light or dark.
+   ============================================================================== */
+
+.lattice-view {
+	--lattice-gap: 12px;
+	padding: var(--size-4-4);
+}
+
+.lattice-grid {
+	display: grid;
+	grid-template-columns: repeat(var(--lattice-columns, 3), minmax(0, 1fr));
+	gap: var(--lattice-gap);
+}
+
+.lattice-cell {
+	min-height: 96px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-secondary);
+}
