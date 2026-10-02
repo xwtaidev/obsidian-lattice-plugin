@@ -7,6 +7,7 @@ import {
 	OPTION_SHOW_PROPERTY_NAMES,
 } from '../constants';
 import type LatticePlugin from '../main';
+import { isBoardProperty } from './board-properties';
 import { LatticeBasesView } from './lattice-bases-view';
 
 /**
@@ -21,13 +22,19 @@ export function registerLatticeBasesView(plugin: LatticePlugin): boolean {
 	return plugin.registerBasesView(LATTICE_BASES_VIEW_TYPE, {
 		name: 'Lattice board',
 		icon: LATTICE_ICON,
-		factory: (controller, containerEl) => new LatticeBasesView(controller, containerEl),
+		factory: (controller, containerEl) =>
+			new LatticeBasesView(plugin, controller, containerEl),
 		options: (): BasesAllOptions[] => [
 			{
 				type: 'property',
 				key: OPTION_GROUP_BY,
 				displayName: 'Group by',
 				placeholder: 'Choose a property',
+				// The picker behind this lists every property the vault has,
+				// down to the file's extension and size. A board groups by
+				// something it would also put on a card, so it offers only
+				// those; see `board-properties.ts`.
+				filter: isBoardProperty,
 			},
 			{
 				type: 'toggle',

@@ -1,4 +1,5 @@
 import { Plugin, WorkspaceLeaf } from 'obsidian';
+import { PropertyMenuHider } from './bases/property-menu';
 import { registerLatticeBasesView } from './bases/register';
 import { registerCommands } from './commands';
 import { LATTICE_ICON, VIEW_TYPE_LATTICE } from './constants';
@@ -15,8 +16,20 @@ import { LatticeView } from './ui/lattice-view';
 export default class LatticePlugin extends Plugin {
 	settings: LatticeSettings = { ...DEFAULT_SETTINGS };
 
+	/**
+	 * Keeps core's property menu down to the properties a board deals in.
+	 *
+	 * It lives on the plugin rather than on a view because the menu belongs to
+	 * the Bases toolbar, not to any one board: a view borrows it to say which
+	 * properties to keep, and the same filter serves whichever board is open.
+	 */
+	readonly propertyMenu = new PropertyMenuHider();
+
 	async onload(): Promise<void> {
 		await this.loadSettings();
+
+		this.propertyMenu.start();
+		this.register(() => this.propertyMenu.stop());
 
 		this.registerView(VIEW_TYPE_LATTICE, (leaf: WorkspaceLeaf) => new LatticeView(leaf, this));
 

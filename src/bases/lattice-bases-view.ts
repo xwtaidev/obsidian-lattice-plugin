@@ -10,7 +10,9 @@ import {
 	OPTION_SHOW_DESCRIPTION,
 	OPTION_SHOW_PROPERTY_NAMES,
 } from '../constants';
+import type LatticePlugin from '../main';
 import { ConfirmModal } from '../ui/confirm-modal';
+import { isBoardProperty } from './board-properties';
 import { extractDescription } from './description';
 import { ValuePalette } from './value-colors';
 import {
@@ -176,7 +178,11 @@ export class LatticeBasesView extends BasesView {
 	 */
 	private drawerLeaf: WorkspaceLeaf | null = null;
 
-	constructor(controller: QueryController, containerEl: HTMLElement) {
+	constructor(
+		private readonly plugin: LatticePlugin,
+		controller: QueryController,
+		containerEl: HTMLElement,
+	) {
 		super(controller);
 		this.containerEl = containerEl;
 	}
@@ -198,6 +204,17 @@ export class LatticeBasesView extends BasesView {
 		root.empty();
 		root.classList.add('lattice-board');
 		this.renderGeneration += 1;
+
+		// Core's property menu offers every property the vault has. A board is
+		// the one thing that knows which of them it deals in, so it names the
+		// two it keeps — when a note was created, when it last moved — and the
+		// menu drops the rest of the file properties. Asked of core rather than
+		// spelled out, because the label follows the app's language and a
+		// `.base` file is allowed to rename it.
+		this.plugin.propertyMenu.setKeptLabels([
+			this.config.getDisplayName('file.ctime'),
+			this.config.getDisplayName('file.mtime'),
+		]);
 
 		// Whatever these pointed at went with the DOM.
 		this.cardDropTargetEl = null;
@@ -501,10 +518,16 @@ export class LatticeBasesView extends BasesView {
 
 		const showNames = this.config.get(OPTION_SHOW_PROPERTY_NAMES) !== false;
 		// The grouping value is left out: the column header already says it, and
-		// repeating it on every card in the column is noise.
+		// repeating it on every card in the column is noise. What survives that
+		// is then narrowed to the properties a board deals in — the toolbar's
+		// property menu lists a file's path and size along with everything else,
+		// and a card should not grow a row for them; see `board-properties.ts`.
 		const properties = this.config
 			.getOrder()
-			.filter((propertyId) => propertyId !== groupBy);
+			.filter(
+				(propertyId) =>
+					propertyId !== groupBy && isBoardProperty(propertyId),
+			);
 		if (properties.length > 0) {
 			// A wrapper rather than rows hanging off the card, so the gap between
 			// the title and the properties can differ from the gap between one

@@ -33,5 +33,13 @@ views:
     latticeShowDescription: true
     # The card always renders the file basename as its title, so listing
     # `file.name` here would only print it a second time.
+    #
+    # What the card shows under the title: the user's own labels, then when the
+    # note arrived and when it last moved. The board only draws the properties
+    # it deals in — custom properties, formulas, and these two timestamps — so
+    # the toolbar's property menu can list a file's path and size without them
+    # ever reaching a card. See `src/bases/board-properties.ts`.
     order:
-      - note.priority
+      - note.tags
+      - file.ctime
+      - file.mtime

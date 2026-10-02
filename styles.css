@@ -322,3 +322,14 @@
 	--tag-color-hover: rgb(var(--lattice-hue));
 	--tag-background-hover: rgba(var(--lattice-hue), 0.25);
 }
+
+/* Core's property menu lists every property the vault has, and it has no API
+   for trimming that list. `property-menu.ts` marks the file properties a board
+   has no use for — name, path, folder, extension, size, backlinks, embeds,
+   links, file tags — and this takes them out of the menu. The mark is per item
+   rather than per menu because the two timestamps stay in, and nothing else
+   carries the class, so no menu prefix is needed. `display: flex` on the item
+   is core's own rule and a less specific one, so this wins on specificity. */
+.bases-toolbar-menu-item.lattice-hidden-property {
+	display: none;
+}

@@ -79,6 +79,7 @@ const markers = [
 	'.lattice-card-row-value',
 	'.lattice-card-description',
 	'.lattice-label',
+	'.lattice-hidden-property',
 ];
 const missing = markers.filter((marker) => !styles.includes(marker));
 if (missing.length > 0) {
