@@ -315,9 +315,15 @@
 	color: var(--text-faint);
 }
 
+/* The cell a value is rendered into, and the same class Obsidian gives its own
+   value containers. Its padding is Obsidian's own rhythm for a table cell —
+   these rows space with the row's gap instead, and its font size would render
+   every value smaller than its name. */
 .lattice-card-row-value {
 	min-width: 0;
 	overflow: hidden;
+	padding: 0;
+	font-size: var(--font-ui-smaller);
 	color: var(--text-muted);
 	text-overflow: ellipsis;
 	white-space: nowrap;
@@ -325,6 +331,14 @@
 
 .lattice-card-row-value.is-empty {
 	color: var(--text-faint);
+}
+
+/* A date arrives as an input, and an input keeps the form control's own type
+   size rather than the one it sits in — Obsidian sets that size for a field
+   being typed into, not for a value being read. Inheriting the row's size is
+   what makes a date the same size as every other value on the card. */
+.lattice-card-row-value input {
+	font-size: inherit;
 }
 
 /* ==============================================================================
@@ -373,19 +387,24 @@
 }
 
 /* Padding and radius are Obsidian's tag metrics, so a value that is a tag and a
-   value that merely looks like one come out the same size. */
+   value that merely looks like one come out the same size. That takes the whole
+   recipe, not just the spacing: a tag's font size is `--tag-size` (0.875em, so a
+   tag is 10.5px in a card row and 11.4px in a column header — it is sized
+   against whatever it sits in), its line box is 1, and its weight is inherited.
+   Borrowing only `--tag-padding-*` is what made a pill a size larger than the
+   tags it sits beside. */
 .lattice-label,
 .lattice-card-row-value.is-chip {
 	display: block;
 	min-width: 0;
 	max-width: 100%;
 	overflow: hidden;
+	font-size: var(--tag-size);
+	line-height: 1;
 	padding: var(--tag-padding-y) var(--tag-padding-x);
 	border-radius: var(--tag-radius);
 	background-color: rgba(var(--lattice-hue), 0.15);
 	color: rgb(var(--lattice-hue));
-	font-weight: var(--font-medium);
-	line-height: var(--line-height-tight);
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -393,9 +412,11 @@
 /* A column title that names a value wears the pill too. Two classes, not one,
    so this beats .lattice-column-title on specificity rather than on the order
    the two rules happen to sit in this file. The header is not a card, so its
-   pill is set at the header's own size. */
+   pill is set at the header's own size — the column's name is a heading, and a
+   tag in that row would be set at that size too. */
 .lattice-column-title.lattice-label {
 	font-size: var(--font-ui-small);
+	font-weight: var(--font-medium);
 	color: rgb(var(--lattice-hue));
 	background-color: rgba(var(--lattice-hue), 0.15);
 }

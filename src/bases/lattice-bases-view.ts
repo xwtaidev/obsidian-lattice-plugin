@@ -867,9 +867,17 @@ export class LatticeBasesView extends BasesView {
 			});
 		}
 
-		const valueEl = row.createSpan({ cls: 'lattice-card-row-value' });
+		// `bases-rendered-value` is the class Obsidian puts on its own value
+		// containers (`bases-cards-line`), and it is load bearing: it carries
+		// `--input-border-width: 0` and the input resets that tell an input it is
+		// a value being shown rather than a field being edited. A date renders as
+		// an input, so without it a card shows a boxed form control in the middle
+		// of a line of text.
+		const valueEl = row.createSpan({ cls: 'lattice-card-row-value bases-rendered-value' });
 		const value = entry.getValue(propertyId);
-		if (value === null) {
+		// `IS_MISSING` covers `null` as well; it is spelled out here so the type
+		// narrows for the render below, which takes a value and not a maybe.
+		if (value === null || IS_MISSING(value)) {
 			valueEl.classList.add('is-empty');
 			valueEl.setText('—');
 			return;
@@ -896,7 +904,8 @@ export class LatticeBasesView extends BasesView {
 	 * padding of an inline child is painted outside its own line box.
 	 *
 	 * Anything else — a link, a date — is left exactly as Obsidian drew it. It
-	 * is already telling the reader what it is.
+	 * is already telling the reader what it is, and the class on the cell is
+	 * what keeps a date a line of text rather than a form control.
 	 */
 	private colorValue(valueEl: HTMLElement): void {
 		const tags = valueEl.querySelectorAll('.tag');
