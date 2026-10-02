@@ -141,6 +141,101 @@
 	min-height: var(--size-4-4);
 }
 
+/* The column that is not there yet.
+   The same box as a column — same padding, same border, same radius — so its
+   label sits on the header line it belongs to and reads as the next column
+   rather than as a caption on the board. Only as wide as its own text, though:
+   a full-width empty box would look like a column that failed to load.
+   `height: auto` because Obsidian's global button rule pins every button to
+   `height: var(--input-height)`, which centres this label in a 30px box while
+   the column names start at the top of theirs — half a line out of step. */
+.lattice-add-column {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--size-4-1);
+	width: auto;
+	height: auto;
+	padding: var(--size-4-2);
+	border: 1px solid transparent;
+	border-radius: var(--radius-m);
+	background-color: transparent;
+	box-shadow: none;
+	color: var(--text-muted);
+	font-size: var(--font-ui-small);
+	white-space: nowrap;
+}
+
+.lattice-add-column:hover {
+	background-color: var(--background-secondary);
+	color: var(--text-normal);
+}
+
+.lattice-add-column-icon {
+	display: flex;
+	align-items: center;
+	--icon-size: var(--icon-s);
+}
+
+/* The name of a column is a tag, and a tag carries its own vertical padding and
+   a line box of exactly its own size. The label wears the same metrics, so the
+   button's text sits on the line the column names sit on rather than level with
+   the top of their pills. Vertical only: the space to the left and right is the
+   button's own. */
+.lattice-add-column-label {
+	padding-block: var(--tag-padding-y);
+	line-height: 1;
+}
+
+/* The columns a removed one can be brought back as, listed inside the dialog
+   that asks for a column name. Chips rather than a list, because there are
+   usually none and never many, and the name is the whole of what they say.
+
+   Sized as the pill a column name wears on the board, not as the dialog's own
+   buttons: `height: auto` because Obsidian's global button rule pins every
+   button to `height: var(--input-height)`, which would make these as tall and as
+   loud as the Cancel and Add column buttons they sit above. They are the second
+   way to answer, and the answer is a column name, so they look like one. */
+.lattice-prompt-suggestions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+	margin-top: var(--size-4-3);
+}
+
+.lattice-prompt-suggestion {
+	display: flex;
+	align-items: center;
+	gap: var(--size-4-1);
+	width: auto;
+	height: auto;
+	max-width: 100%;
+	padding: var(--tag-padding-y) var(--tag-padding-x);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--tag-radius);
+	background-color: var(--background-secondary);
+	color: var(--text-muted);
+	box-shadow: none;
+}
+
+.lattice-prompt-suggestion:hover {
+	border-color: var(--background-modifier-border-hover);
+	background-color: var(--background-secondary-alt);
+	color: var(--text-normal);
+}
+
+.lattice-prompt-suggestion-icon {
+	display: flex;
+	align-items: center;
+	--icon-size: var(--icon-xs);
+}
+
+/* A column name is arbitrary text and can be longer than the dialog. */
+.lattice-prompt-suggestion-label {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
 /* Taller than it looks it should be. A card is a title, the note's own opening
    line, and a line or two of properties, and at 8px of padding with 2px between
    lines the properties read as a grey block rather than as separate facts. */

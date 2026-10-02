@@ -78,6 +78,7 @@ const markers = [
 	'.lattice-column.is-drop-before',
 	'.lattice-card-row-value',
 	'.lattice-card-description',
+	'.lattice-add-column',
 	'.lattice-label',
 	'.lattice-hidden-property',
 ];

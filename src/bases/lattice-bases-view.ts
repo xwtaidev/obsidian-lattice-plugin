@@ -1,9 +1,10 @@
-import { BasesView, Menu, NullValue, TFile, getLanguage, setIcon } from 'obsidian';
+import { BasesView, Menu, Notice, NullValue, TFile, getLanguage, setIcon } from 'obsidian';
 import type { BasesEntry, BasesPropertyId, QueryController, WorkspaceLeaf } from 'obsidian';
 import {
 	LATTICE_BASES_VIEW_TYPE,
 	LATTICE_CARD_DRAG_TYPE,
 	LATTICE_COLUMN_DRAG_TYPE,
+	OPTION_ADDED_COLUMNS,
 	OPTION_COLUMN_ORDER,
 	OPTION_GROUP_BY,
 	OPTION_REMOVED_COLUMNS,
@@ -12,6 +13,7 @@ import {
 } from '../constants';
 import type LatticePlugin from '../main';
 import { ConfirmModal } from '../ui/confirm-modal';
+import { TextPromptModal } from '../ui/text-prompt-modal';
 import { isBoardProperty } from './board-properties';
 import { extractDescription } from './description';
 import { ValuePalette } from './value-colors';
@@ -20,6 +22,7 @@ import {
 	columnKey,
 	moveColumn,
 	reorderByDrop,
+	restorableColumns,
 	writablePropertyKey,
 	type ColumnNaming,
 	type ColumnState,
@@ -290,6 +293,7 @@ export class LatticeBasesView extends BasesView {
 		columns.forEach((column, index) => {
 			board.appendChild(this.renderColumn(column, groupBy, index, columns));
 		});
+		this.renderAddColumn(board, groupBy, columns);
 		this.drawnOrder = columns.map((column) => columnKey(column.value));
 
 		this.wireBoardDragAndDrop(board, groupBy, columns);
@@ -299,6 +303,7 @@ export class LatticeBasesView extends BasesView {
 		return {
 			order: readStringList(this.config.get(OPTION_COLUMN_ORDER)),
 			removed: readStringList(this.config.get(OPTION_REMOVED_COLUMNS)),
+			added: readStringList(this.config.get(OPTION_ADDED_COLUMNS)),
 		};
 	}
 
@@ -513,9 +518,7 @@ export class LatticeBasesView extends BasesView {
 		// no dialog at all.
 		const body =
 			`The column leaves this board. Its ${count} keep their properties; no file is modified.` +
-			(restorable
-				? ' To bring it back, remove its entry from "latticeRemovedColumns" in this view\'s .base file.'
-				: '');
+			(restorable ? ' "Add column", at the end of the board, brings it back.' : '');
 
 		const confirmed = await ConfirmModal.open(this.app, {
 			title: `Delete the "${column.label}" column?`,
@@ -527,9 +530,103 @@ export class LatticeBasesView extends BasesView {
 		}
 
 		const { removed } = this.readColumnState();
-		// The order list is left alone: a column that is added back later returns
-		// to the place the user had put it, not to the end.
+		// The order and added lists are left alone: a column that is added back
+		// later returns to the place the user had put it, not to the end.
 		this.config.set(OPTION_REMOVED_COLUMNS, [...removed, columnKey(column.value)]);
+		this.render();
+	}
+
+	/**
+	 * The button that adds a column, after the last one.
+	 *
+	 * A column exists because a note carries its value, which leaves no way to
+	 * set a board up: the value nobody has typed yet has nowhere to put the
+	 * first card. It sits after the last column rather than in a toolbar so that
+	 * the column it adds appears where it was asked for.
+	 */
+	private renderAddColumn(
+		board: HTMLElement,
+		groupBy: BasesPropertyId | null,
+		columns: LatticeColumn[],
+	): void {
+		// A property that cannot be written — `file.name`, a formula — has no
+		// value to store in a new column, so a column here would be a promise the
+		// board cannot keep.
+		if (groupBy === null || writablePropertyKey(groupBy) === null) {
+			return;
+		}
+
+		const button = board.createEl('button', {
+			cls: 'lattice-add-column',
+			attr: { type: 'button', 'aria-label': 'Add a column to this board' },
+		});
+		setIcon(button.createSpan({ cls: 'lattice-add-column-icon' }), 'plus');
+		button.createSpan({ cls: 'lattice-add-column-label', text: 'Add column' });
+		button.addEventListener('click', (event) => {
+			// Otherwise the click reaches the board behind the button.
+			event.stopPropagation();
+			void this.askForColumnName(groupBy, columns);
+		});
+	}
+
+	private async askForColumnName(
+		groupBy: BasesPropertyId,
+		columns: LatticeColumn[],
+	): Promise<void> {
+		// Removing a column is a delete, so it needs an undelete in the same
+		// place, and this dialog is that place: the button that adds a column is
+		// the one that brings one back. Only columns the board can still name are
+		// offered — one whose notes have all lost the value has nothing left to
+		// call it.
+		const restorable = restorableColumns(
+			this.data.data,
+			groupBy,
+			this.readColumnState(),
+			IS_MISSING,
+			NAMING,
+		);
+		const value = await TextPromptModal.open(this.app, {
+			title: 'Add column',
+			body: 'The name becomes the value of the grouped property on every note you drop here.',
+			placeholder: 'Column name',
+			confirmText: 'Add column',
+			suggestions: restorable.map((ref) => ({
+				label: `Restore "${ref.label}"`,
+				value: ref.key,
+			})),
+		});
+		if (value === null) {
+			return;
+		}
+
+		if (columns.some((column) => columnKey(column.value) === value)) {
+			// A column named by a value the board already has is already there.
+			// Saying so beats closing the dialog and changing nothing.
+			new Notice(`"${value}" is already a column on this board.`);
+			return;
+		}
+
+		this.addColumn(value);
+	}
+
+	/**
+	 * Put a column on the board, or bring one back.
+	 *
+	 * The removed list has to be cleared of the value, or the column would be
+	 * added and filtered straight back out. Both writes go through `config.set`
+	 * rather than the plugin's own data, so the board keeps its column state in
+	 * the `.base` file it belongs to.
+	 */
+	private addColumn(value: string): void {
+		const state = this.readColumnState();
+		this.config.set(
+			OPTION_REMOVED_COLUMNS,
+			state.removed.filter((key) => key !== value),
+		);
+		this.config.set(
+			OPTION_ADDED_COLUMNS,
+			state.added.includes(value) ? state.added : [...state.added, value],
+		);
 		this.render();
 	}
 

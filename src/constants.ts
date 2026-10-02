@@ -54,6 +54,16 @@ export const OPTION_COLUMN_ORDER = 'latticeColumnOrder';
 export const OPTION_REMOVED_COLUMNS = 'latticeRemovedColumns';
 
 /**
+ * Columns added by hand, which are drawn while they are empty.
+ *
+ * A board's columns come from the data, so this is what makes a column exist
+ * for a value no note carries yet — the value the first card of that column is
+ * about to be given. Like the two above it is state rather than an option, and
+ * for the same reason: it is a list of values, not a field to type into.
+ */
+export const OPTION_ADDED_COLUMNS = 'latticeAddedColumns';
+
+/**
  * Drag payload types, one per thing that can be dragged.
  *
  * Two drags share the same board and the same drop zones, so neither may be

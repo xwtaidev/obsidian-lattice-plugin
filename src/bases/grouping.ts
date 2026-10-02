@@ -51,9 +51,19 @@ export interface ColumnState {
 	order: string[];
 	/** Columns taken off this board. Their notes are untouched. */
 	removed: string[];
+	/**
+	 * Columns added by hand, which are drawn while they are empty.
+	 *
+	 * A column normally exists because a note carries its value, which leaves no
+	 * way to set a board up: the value nobody has typed yet has nowhere to put
+	 * the first card. A key listed here is a column in its own right; once notes
+	 * carry the value it is indistinguishable from any other, and the entry then
+	 * only keeps it from vanishing when the last card leaves.
+	 */
+	added: string[];
 }
 
-export const EMPTY_COLUMN_STATE: ColumnState = { order: [], removed: [] };
+export const EMPTY_COLUMN_STATE: ColumnState = { order: [], removed: [], added: [] };
 
 /**
  * Whether a value counts as no value at all.
@@ -108,7 +118,36 @@ export function buildColumns(
 	const derived = deriveColumns(entries, propertyId, isMissing, naming);
 	const removed = new Set(state.removed);
 	const kept = derived.filter((column) => !removed.has(columnKey(column.value)));
-	return applyOrder(kept, state.order);
+	return applyOrder([...kept, ...addedColumns(kept, state.added, removed)], state.order);
+}
+
+/**
+ * The columns the user added that the data does not produce.
+ *
+ * Removal wins: a column added and then deleted is in both lists, and it is the
+ * delete that was the later wish. The empty key is skipped rather than
+ * materialised — it belongs to the column that collects entries with no value,
+ * which exists exactly while some entry has none, and it is not text anyone
+ * could have typed into the first place.
+ */
+function addedColumns(
+	kept: LatticeColumn[],
+	added: string[],
+	removed: Set<string>,
+): LatticeColumn[] {
+	const present = new Set(kept.map((column) => columnKey(column.value)));
+	const columns: LatticeColumn[] = [];
+	for (const key of added) {
+		if (key.length === 0 || present.has(key) || removed.has(key)) {
+			continue;
+		}
+
+		present.add(key);
+		// The key is the value, so it is also what the column is called.
+		columns.push({ value: key, label: key, entries: [] });
+	}
+
+	return columns;
 }
 
 /**
@@ -233,4 +272,45 @@ export function writablePropertyKey(propertyId: BasesPropertyId): string | null 
 	const source = propertyId.slice(0, separator);
 	const name = propertyId.slice(separator + 1);
 	return source === 'note' && name.length > 0 ? name : null;
+}
+
+/** A column the board can put back, named the way its header would read. */
+export interface ColumnRef {
+	/** `columnKey` of the column. */
+	key: string;
+	label: string;
+}
+
+/**
+ * The columns the user took off this board, ready to be offered back.
+ *
+ * The label normally comes from the data: a removed column's notes are still
+ * there, spelling the value the way they spell it. A column no note carries any
+ * more can only be known by its key, which for a column the user added by hand
+ * is the name they typed — so the added list is consulted too, and adding then
+ * deleting a column is not a way to lose it.
+ */
+export function restorableColumns(
+	entries: BasesEntry[],
+	propertyId: BasesPropertyId | null,
+	state: ColumnState,
+	isMissing: MissingValue = PLAINLY_MISSING,
+	naming: ColumnNaming = PLAINLY_NAMED,
+): ColumnRef[] {
+	const hidden = new Set(state.removed);
+	const refs: ColumnRef[] = [];
+	for (const column of deriveColumns(entries, propertyId, isMissing, naming)) {
+		const key = columnKey(column.value);
+		if (hidden.has(key)) {
+			refs.push({ key, label: column.label });
+		}
+	}
+
+	for (const key of state.added) {
+		if (key.length > 0 && hidden.has(key) && !refs.some((ref) => ref.key === key)) {
+			refs.push({ key, label: key });
+		}
+	}
+
+	return refs;
 }
