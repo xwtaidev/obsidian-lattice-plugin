@@ -1,4 +1,4 @@
-import type { BasesEntry, BasesPropertyId } from 'obsidian';
+import type { BasesEntry, BasesPropertyId, Value } from 'obsidian';
 
 /**
  * Turning a flat list of entries into board columns.
@@ -56,6 +56,42 @@ export interface ColumnState {
 export const EMPTY_COLUMN_STATE: ColumnState = { order: [], removed: [] };
 
 /**
+ * Whether a value counts as no value at all.
+ *
+ * `BasesEntry.getValue` does not answer `null` for a property a note does not
+ * carry. It answers with a `NullValue` — a real object, whose `toString()` is
+ * the text "null" — and that text read at face value is wrong in three ways at
+ * once: the notes without the property get a column named `null`, that column
+ * claims to be a value someone typed (so it gets a colour and a place in the
+ * order), and it never merges with the column the board keeps for entries with
+ * no value at all. Only a property the query cannot resolve gives a `null`.
+ *
+ * The app is the only thing that can recognise the class, and this module is
+ * kept free of the app so it can be exercised without one, so the test is
+ * passed in. `PLAINLY_MISSING` below is the reading with no app to ask.
+ */
+export type MissingValue = (value: Value | null) => boolean;
+
+/** The plain reading: nothing but `null` is missing. */
+const PLAINLY_MISSING: MissingValue = (value) => value === null;
+
+/**
+ * What the two columns that stand for absence are called.
+ *
+ * Neither is a value any note carries, so neither can be read off the data, and
+ * both are the user's language — which this module has none of.
+ */
+export interface ColumnNaming {
+	/** Collects entries with no value for the grouped property. */
+	noValue: string;
+	/** The single column of a board that groups on nothing at all. */
+	allNotes: string;
+}
+
+/** The names a caller with no language to ask about gets. */
+const PLAINLY_NAMED: ColumnNaming = { noValue: 'No value', allNotes: 'All notes' };
+
+/**
  * Group entries by a property, then apply the user's column state.
  *
  * A multi-value property (tags, for instance) stringifies to a joined list, so
@@ -66,8 +102,10 @@ export function buildColumns(
 	entries: BasesEntry[],
 	propertyId: BasesPropertyId | null,
 	state: ColumnState = EMPTY_COLUMN_STATE,
+	isMissing: MissingValue = PLAINLY_MISSING,
+	naming: ColumnNaming = PLAINLY_NAMED,
 ): LatticeColumn[] {
-	const derived = deriveColumns(entries, propertyId);
+	const derived = deriveColumns(entries, propertyId, isMissing, naming);
 	const removed = new Set(state.removed);
 	const kept = derived.filter((column) => !removed.has(columnKey(column.value)));
 	return applyOrder(kept, state.order);
@@ -80,20 +118,22 @@ export function buildColumns(
 function deriveColumns(
 	entries: BasesEntry[],
 	propertyId: BasesPropertyId | null,
+	isMissing: MissingValue,
+	naming: ColumnNaming,
 ): LatticeColumn[] {
 	if (propertyId === null) {
-		return [{ value: null, label: 'All notes', entries: [...entries] }];
+		return [{ value: null, label: naming.allNotes, entries: [...entries] }];
 	}
 
 	const columns = new Map<string, LatticeColumn>();
 	for (const entry of entries) {
 		const value = entry.getValue(propertyId);
-		const text = value === null ? null : value.toString();
+		const text = value === null || isMissing(value) ? null : value.toString();
 		const key = text === null ? NO_VALUE_KEY : `value:${text}`;
 
 		let column = columns.get(key);
 		if (column === undefined) {
-			column = { value: text, label: text ?? 'No value', entries: [] };
+			column = { value: text, label: text ?? naming.noValue, entries: [] };
 			columns.set(key, column);
 		}
 		column.entries.push(entry);

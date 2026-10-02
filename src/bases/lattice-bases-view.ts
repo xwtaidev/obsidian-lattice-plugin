@@ -1,4 +1,4 @@
-import { BasesView, Menu, TFile, setIcon } from 'obsidian';
+import { BasesView, Menu, NullValue, TFile, getLanguage, setIcon } from 'obsidian';
 import type { BasesEntry, BasesPropertyId, QueryController, WorkspaceLeaf } from 'obsidian';
 import {
 	LATTICE_BASES_VIEW_TYPE,
@@ -21,8 +21,10 @@ import {
 	moveColumn,
 	reorderByDrop,
 	writablePropertyKey,
+	type ColumnNaming,
 	type ColumnState,
 	type LatticeColumn,
+	type MissingValue,
 } from './grouping';
 
 /**
@@ -37,6 +39,42 @@ function readStringList(value: unknown): string[] {
 
 	return value.filter((item): item is string => typeof item === 'string');
 }
+
+/**
+ * What this board counts as no value.
+ *
+ * `BasesEntry.getValue` answers with a `NullValue` — a real object, whose
+ * `toString()` is the text "null" — rather than `null` when a note does not
+ * carry the property, so notes without one would each get a column named
+ * `null`. Both tests are used. Identity is how core itself decides: its own
+ * grouping folds a falsy value into `NullValue.value` and calls a key equal to
+ * that "the one without a value", and the class is documented as a singleton.
+ * `instanceof` then also catches the value if it came from the copy of the
+ * class a popout window holds.
+ */
+const IS_MISSING: MissingValue = (value) =>
+	value === null || value === NullValue.value || value instanceof NullValue;
+
+/**
+ * What to call the column that collects the notes nobody gave a value.
+ *
+ * It names an absence, so no note spells it and it cannot be read off the data;
+ * and unlike a file property there is nothing in the app to borrow the word
+ * from — core's own group headings say `None` for the same column. The board
+ * this one is modelled on calls it `未分组`, which is the column the user is
+ * looking for by that name, so the app's language decides the whole word and
+ * everything else on the board stays English.
+ */
+function noValueLabel(): string {
+	const language = getLanguage();
+	if (language === 'zh-TW') {
+		return '未分組';
+	}
+
+	return language.startsWith('zh') ? '未分组' : 'Ungrouped';
+}
+
+const NAMING: ColumnNaming = { noValue: noValueLabel(), allNotes: 'All notes' };
 
 /** What a card drag carries: which note, and which column it started in. */
 interface CardDragPayload {
@@ -235,12 +273,18 @@ export class LatticeBasesView extends BasesView {
 		}
 
 		const state = this.readColumnState();
-		const columns = buildColumns(this.data.data, groupBy, {
-			...state,
-			// An order the user set explicitly wins. Otherwise keep drawing the
-			// columns where they already are; see `drawnOrder`.
-			order: state.order.length > 0 ? state.order : this.drawnOrder,
-		});
+		const columns = buildColumns(
+			this.data.data,
+			groupBy,
+			{
+				...state,
+				// An order the user set explicitly wins. Otherwise keep drawing the
+				// columns where they already are; see `drawnOrder`.
+				order: state.order.length > 0 ? state.order : this.drawnOrder,
+			},
+			IS_MISSING,
+			NAMING,
+		);
 
 		const board = root.createDiv({ cls: 'lattice-board-columns' });
 		columns.forEach((column, index) => {
