@@ -449,3 +449,24 @@
 .bases-toolbar-menu-item.lattice-hidden-property {
 	display: none;
 }
+
+/* Sort and filter are not board features yet. Core draws one toolbar for the
+   view under it, and those two buttons front a table's questions — order the
+   rows, hide the ones that do not match. A board answers both with its columns
+   instead, so the buttons lead somewhere the board cannot follow. They are out
+   until it can. Delete this rule when it can.
+
+   The toolbar is a *sibling* of the view it belongs to, not an ancestor of it,
+   so a plain descendant rule cannot reach it. `:has()` walks sideways: our
+   container is the `.bases-view` element core hands the view, and it carries
+   `.lattice-board`. Scoping it that way keeps the buttons in the table and
+   card views, which do answer for sort and filter — a plugin-wide rule would
+   take them out of every base in the vault.
+
+   Core hides the sort button the same way for print, so the class on that item
+   is core's own and not a guess. Both classes are on the `.bases-toolbar-item`
+   div, and `display: flex` there is core's rule at a lower specificity. */
+.bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-sort-menu,
+.bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-filter-menu {
+	display: none;
+}
