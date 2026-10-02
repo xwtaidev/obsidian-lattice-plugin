@@ -1,6 +1,7 @@
 import { Plugin, WorkspaceLeaf } from 'obsidian';
 import { PropertyMenuHider } from './bases/property-menu';
 import { registerLatticeBasesView } from './bases/register';
+import { BoardViewAdder } from './bases/view-menu';
 import { registerCommands } from './commands';
 import { LATTICE_ICON, VIEW_TYPE_LATTICE } from './constants';
 import { DEFAULT_SETTINGS, LatticeSettingTab, type LatticeSettings } from './settings';
@@ -25,11 +26,23 @@ export default class LatticePlugin extends Plugin {
 	 */
 	readonly propertyMenu = new PropertyMenuHider();
 
+	/**
+	 * Makes core's "Add view" add a board, as long as a board is on screen.
+	 *
+	 * Also on the plugin, and for the same reason: the view list belongs to the
+	 * `.base` file rather than to any one view of it, and the board that hands
+	 * over its config is only the one that happens to be open.
+	 */
+	readonly viewMenu = new BoardViewAdder();
+
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
 		this.propertyMenu.start();
 		this.register(() => this.propertyMenu.stop());
+
+		this.viewMenu.start();
+		this.register(() => this.viewMenu.stop());
 
 		this.registerView(VIEW_TYPE_LATTICE, (leaf: WorkspaceLeaf) => new LatticeView(leaf, this));
 

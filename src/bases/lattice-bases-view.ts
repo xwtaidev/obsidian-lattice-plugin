@@ -257,6 +257,12 @@ export class LatticeBasesView extends BasesView {
 			this.config.getDisplayName('file.mtime'),
 		]);
 
+		// A board is also the only way to the view list of the file it is
+		// showing, which core's "Add view" needs and cannot reach on its own;
+		// see `view-menu.ts`. Every render, because core assigns `config` after
+		// the factory returns.
+		this.plugin.viewMenu.remember(this.containerEl, this.config);
+
 		// Whatever these pointed at went with the DOM.
 		this.cardDropTargetEl = null;
 		this.columnIndicatorEl = null;
