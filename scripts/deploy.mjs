@@ -80,6 +80,7 @@ const markers = [
 	'.lattice-card-description',
 	'.lattice-add-column',
 	'.lattice-label',
+	'.lattice-new-tab',
 	'.lattice-hidden-property',
 ];
 const missing = markers.filter((marker) => !styles.includes(marker));

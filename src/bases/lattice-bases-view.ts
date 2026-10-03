@@ -16,6 +16,7 @@ import { ConfirmModal } from '../ui/confirm-modal';
 import { TextPromptModal } from '../ui/text-prompt-modal';
 import { isBoardProperty } from './board-properties';
 import { extractDescription } from './description';
+import { DRAWER_CONTAINER_CLASS, NEW_TAB_CLASS, NEW_TAB_ICON, newTabLabel } from './drawer-action';
 import { searchCardTitles } from './search-scope';
 import { ValuePalette } from './value-colors';
 import {
@@ -219,6 +220,16 @@ export class LatticeBasesView extends BasesView {
 	 * user closes it the reference is stale, which `drawerLeafInUse` detects.
 	 */
 	private drawerLeaf: WorkspaceLeaf | null = null;
+
+	/**
+	 * The button added to whatever the drawer is showing, if one is up.
+	 *
+	 * The leaf is reused, so its view's actions are too: without holding the
+	 * element there is no way to take the last one down before adding the next,
+	 * and clicking through a board would stack a column of them along the
+	 * header.
+	 */
+	private drawerAction: HTMLElement | null = null;
 
 	constructor(
 		private readonly plugin: LatticePlugin,
@@ -836,7 +847,137 @@ export class LatticeBasesView extends BasesView {
 
 		this.drawerLeaf = leaf;
 		await leaf.openFile(file);
+		this.offerNewTab(leaf);
 		await this.app.workspace.revealLeaf(leaf);
+	}
+
+	/**
+	 * Put the way out of the drawer over the corner of what it is showing.
+	 *
+	 * A preview is the drawer by design — the board stays put and the note is
+	 * read beside it — but a note in the sidebar cannot leave it, and Obsidian
+	 * puts no way out on the header either: a drawer's header is hidden whole,
+	 * which takes the view's own buttons (the bookmark, the reading-mode
+	 * toggle, the menu) with it. So `addAction`, which writes into that header,
+	 * writes somewhere invisible; the button goes into the view's content
+	 * instead and is held against its top corner by styles.css.
+	 *
+	 * Only for a leaf in the right sidebar: it means "out of the drawer", and a
+	 * tab that has been dragged into the main area is already out.
+	 */
+	private offerNewTab(leaf: WorkspaceLeaf): void {
+		this.removeNewTab();
+
+		if (leaf.getRoot() !== this.app.workspace.rightSplit) {
+			return;
+		}
+
+		const container = leaf.view.containerEl;
+		container.classList.add(DRAWER_CONTAINER_CLASS);
+		const button = container.createEl('button', {
+			cls: `clickable-icon ${NEW_TAB_CLASS}`,
+			attr: { 'aria-label': newTabLabel(getLanguage()) },
+		});
+		setIcon(button, NEW_TAB_ICON);
+		button.addEventListener('click', () => {
+			void this.openInMainArea(leaf);
+		});
+
+		this.drawerAction = button;
+	}
+
+	/**
+	 * Take the last button down, and the mark that placed it, before the next
+	 * one goes up.
+	 *
+	 * The leaf is reused, so its view is too, and a button left behind would
+	 * stay for every note the drawer goes on to show.
+	 */
+	private removeNewTab(): void {
+		const button = this.drawerAction;
+		this.drawerAction = null;
+		if (button === null) {
+			return;
+		}
+
+		const container = button.parentElement;
+		button.remove();
+		container?.classList.remove(DRAWER_CONTAINER_CLASS);
+	}
+
+	/**
+	 * The note the drawer is showing, as a page of its own in the main area.
+	 *
+	 * Which note is asked of the view rather than remembered from the click, so
+	 * the button keeps meaning the same thing after the drawer has been
+	 * navigated — including by following a link inside the preview, which is
+	 * exactly when a page of one's own is worth wanting.
+	 */
+	private async openInMainArea(leaf: WorkspaceLeaf): Promise<void> {
+		const shown = (leaf.view as { file?: TFile | null }).file ?? null;
+		if (shown === null) {
+			return;
+		}
+
+		// Already a page of its own somewhere? Go there instead of opening a
+		// second copy of it. The button means "show me this properly", and the
+		// note being open already is the board answering that. A new tab every
+		// press is also what pressing twice would otherwise leave behind.
+		const already = this.mainAreaLeafFor(shown.path);
+		if (already !== null) {
+			await this.app.workspace.revealLeaf(already);
+		} else {
+			await this.app.workspace.openLinkText(shown.path, '', 'tab');
+		}
+
+		this.closeDrawer(leaf);
+	}
+
+	/**
+	 * Take the drawer down, now that the note is somewhere it can be read.
+	 *
+	 * The panel was there to show the note *beside* the board; once the note
+	 * has a page of its own the drawer would only show it a second time, and
+	 * hold a column of the screen to do it. So it goes — and only it: a panel
+	 * the user opened in the sidebar themselves is theirs, and a sidebar still
+	 * holding one is not ours to fold.
+	 *
+	 * Detaching the leaf is what the sidebar notices: an empty side dock is
+	 * put away, which is the same "out of the drawer" the button promises,
+	 * said the same way whether or not Obsidian would have got there itself.
+	 */
+	private closeDrawer(leaf: WorkspaceLeaf): void {
+		if (leaf.getRoot() !== this.app.workspace.rightSplit) {
+			return;
+		}
+
+		if (this.drawerLeaf === leaf) {
+			this.drawerLeaf = null;
+		}
+
+		this.removeNewTab();
+		leaf.detach();
+	}
+
+	/** The leaf in the main area showing a note, if any is. */
+	private mainAreaLeafFor(path: string): WorkspaceLeaf | null {
+		const right = this.app.workspace.rightSplit;
+		const left = this.app.workspace.leftSplit;
+		let found: WorkspaceLeaf | null = null;
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (found !== null) {
+				return;
+			}
+			const root = leaf.getRoot();
+			if (root === right || root === left) {
+				return;
+			}
+			if ((leaf.view as { file?: TFile | null }).file?.path === path) {
+				found = leaf;
+			}
+		});
+
+		return found;
 	}
 
 	/**

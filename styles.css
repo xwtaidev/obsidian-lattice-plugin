@@ -470,3 +470,34 @@
 .bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-filter-menu {
 	display: none;
 }
+
+/* The way out of a preview that opened in the sidebar.
+   
+   A note in the drawer is shown with its header hidden whole — Obsidian draws
+   no title bar in the sidebar — and that takes the buttons kept there with it:
+   the view's own bookmark, its reading-mode toggle and its menu are all off
+   screen, which is why `addAction` cannot be used to add one. So the button is
+   placed over the corner of the content instead, wearing core's own class for
+   a header button (`clickable-icon`) so it looks and behaves like the ones in
+   the main area.
+
+   The positioning context is a class this plugin puts on the content when it
+   places the button, rather than a guess at what Obsidian sets there. */
+.workspace-leaf-content.lattice-with-new-tab {
+	position: relative;
+}
+
+.lattice-new-tab {
+	position: absolute;
+	inset-block-start: var(--size-4-2);
+	inset-inline-end: var(--size-4-2);
+	z-index: var(--layer-cover, 10);
+	background-color: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-s);
+	box-shadow: var(--shadow-s);
+}
+
+.lattice-new-tab:hover {
+	background-color: var(--background-modifier-hover);
+}
