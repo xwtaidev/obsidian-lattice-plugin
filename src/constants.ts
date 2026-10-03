@@ -1,19 +1,25 @@
 /**
  * Stable identifiers.
  *
- * `PLUGIN_ID` and `VIEW_TYPE_LATTICE` are API once the plugin is released:
- * saved workspace layouts and user hotkeys refer to them by name, so renaming
- * either one silently breaks those for everyone who already installed it.
+ * `PLUGIN_ID` is API once the plugin is released: saved workspace layouts and
+ * user hotkeys refer to it by name, so renaming it silently breaks those for
+ * everyone who already installed it.
  */
 
 /** Matches `id` in manifest.json and the folder name under `.obsidian/plugins/`. */
 export const PLUGIN_ID = 'lattice';
 
-/** The view type Obsidian registers for the grid. */
-export const VIEW_TYPE_LATTICE = 'lattice-view';
-
 /** Obsidian's built-in icon name, used for the ribbon button and the tab. */
 export const LATTICE_ICON = 'layout-grid';
+
+/**
+ * The `.base` file the ribbon icon opens, until the user names another one.
+ *
+ * A board is a Bases view, and a Bases view lives in a `.base` file, so the
+ * plugin has to have one to open. `examples/lattice-board.base` is the file
+ * that ships with it, and the name a vault that followed the readme has.
+ */
+export const DEFAULT_BOARD_FILE = 'lattice-board.base';
 
 /** The Bases view type, registered with `registerBasesView`. */
 export const LATTICE_BASES_VIEW_TYPE = 'lattice-board';

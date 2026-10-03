@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting } from 'obsidian';
+import { DEFAULT_BOARD_FILE } from './constants';
 import type LatticePlugin from './main';
 
 /**
@@ -10,12 +11,18 @@ import type LatticePlugin from './main';
  * `Object.assign` against the defaults is what fills the rest in.
  */
 export interface LatticeSettings {
-	/** How many columns the grid uses. */
-	columns: number;
+	/**
+	 * The `.base` file the plugin's icon opens, as a path from the vault root.
+	 *
+	 * A board is a Bases view and a Bases view lives in a `.base` file, so
+	 * there is no board to open without one. Which file is a choice — a vault
+	 * can hold several `.base` files, and this picks the one the icon is for.
+	 */
+	boardFile: string;
 }
 
 export const DEFAULT_SETTINGS: LatticeSettings = {
-	columns: 3,
+	boardFile: DEFAULT_BOARD_FILE,
 };
 
 /**
@@ -41,22 +48,22 @@ export class LatticeSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Columns')
-			.setDesc('How many columns the grid uses.')
+			.setName('Board file')
+			.setDesc('The .base file the Lattice icon opens. It is kept out of the file explorer.')
 			.addText((text) =>
 				text
-					.setPlaceholder(String(DEFAULT_SETTINGS.columns))
-					.setValue(String(this.plugin.settings.columns))
+					.setPlaceholder(DEFAULT_SETTINGS.boardFile)
+					.setValue(this.plugin.settings.boardFile)
 					.onChange(async (value) => {
-						const parsed = Number.parseInt(value, 10);
-						// Reject rather than coerce: an empty box means "still typing",
-						// not "zero columns".
-						if (!Number.isFinite(parsed) || parsed < 1) {
-							return;
-						}
-						this.plugin.settings.columns = parsed;
+						const path = value.trim();
+						// An empty box means "still typing", not "no board": the
+						// placeholder names the file the plugin ships with.
+						this.plugin.settings.boardFile =
+							path.length > 0 ? path : DEFAULT_SETTINGS.boardFile;
 						await this.plugin.saveSettings();
-						this.plugin.refreshViews();
+						// Which file is kept out of the file explorer is part of
+						// this setting, so it is re-applied with it.
+						this.plugin.applyBoardFileVisibility();
 					}),
 			);
 	}

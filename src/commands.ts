@@ -8,10 +8,10 @@ import type LatticePlugin from './main';
  */
 export function registerCommands(plugin: LatticePlugin): void {
 	plugin.addCommand({
-		id: 'open-view',
-		name: 'Open view',
+		id: 'open-board',
+		name: 'Open board',
 		callback: () => {
-			void plugin.activateView();
+			void plugin.openBoard();
 		},
 	});
 }

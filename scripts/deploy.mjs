@@ -82,6 +82,7 @@ const markers = [
 	'.lattice-label',
 	'.lattice-new-tab',
 	'.lattice-hidden-property',
+	'.lattice-hidden-file',
 ];
 const missing = markers.filter((marker) => !styles.includes(marker));
 if (missing.length > 0) {

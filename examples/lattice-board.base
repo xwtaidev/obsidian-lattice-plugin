@@ -4,6 +4,10 @@
 # entry below already asks for `lattice-board`; if the plugin is enabled and
 # installed, the board renders instead of a table.
 #
+# It also expects a folder called `lattice-cards` — see `newItemFolder` below.
+# Make the folder before pressing a column's `+`, because a `+` whose folder is
+# not there does nothing at all, without an error to say why.
+#
 # The filter keeps the board to notes tagged `task`. Change or delete it to see
 # more of the vault.
 #
@@ -15,6 +19,24 @@
 filters:
   and:
     - file.hasTag("task")
+
+# Where the board puts the notes it creates — the `+` on a column header, and
+# the one at the end of a column in the board this is modelled on. It is core
+# Bases' own top level key, not a Lattice one, and core reads it in this order:
+# this key, then the folder of `newItemTemplate`, then the folder a note is
+# derived from, then the vault's own "default location for new notes". So
+# without it, a new card lands wherever the vault would put a new note, which
+# for most vaults is the root — and the board's notes end up scattered next to
+# everything else rather than in the folder the board is about.
+#
+# It applies to every column, including the one collecting notes with no value:
+# the note is made in this folder first, and only then given the column's value.
+#
+# The folder has to exist. Verified on the machine: point this at a folder that
+# is not there and the `+` does nothing — no note, no Notice, no error. Core
+# writes the file with `vault.create`, which does not make parents, and the
+# write failure is swallowed on the way back up. Nothing Lattice can catch.
+newItemFolder: lattice-cards
 
 properties:
   status:

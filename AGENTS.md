@@ -2,18 +2,21 @@
 
 ## Project overview
 
-- Plugin: **Lattice** (`id: lattice`) — a grid view over the vault. The feature
-  set is not settled yet; `README.md` is a placeholder too.
+- Plugin: **Lattice** (`id: lattice`) — a board over the vault, rendered as a
+  Bases view. The feature set is not settled yet; `README.md` is a placeholder too.
 - Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).
 - Entry point: `src/main.ts` compiled to `main.js` and loaded by Obsidian.
 - Required release artifacts: `main.js`, `manifest.json`, and optional `styles.css`.
-- Current state: scaffold. Lifecycle, view registration, one command and a
-  settings tab all work; the grid renders empty cells.
-    - `src/main.ts` — lifecycle, view registration, commands, settings loading (keep it small).
+- Current state: the board renders real data as a Bases view, so it lives in a
+  `.base` file rather than in a view the plugin registers itself. The plugin owns
+  nothing but lifecycle, the file tree, and configuration.
+    - `src/main.ts` — lifecycle, the ribbon icon and the settings tab (keep it small).
     - `src/commands.ts` — `addCommand` calls.
     - `src/settings.ts` — the settings interface, `DEFAULT_SETTINGS`, and the settings tab.
-    - `src/constants.ts` — stable ids and the icon name.
-    - `src/ui/lattice-view.ts` — the grid view.
+    - `src/constants.ts` — stable ids, the icon name, the default board file.
+    - `src/board-file.ts` — keeps the board's `.base` file out of the file explorer.
+    - `src/bases/` — the Bases view and the pieces it is built from (see `README.md`).
+    - `src/ui/` — the two dialogs core has no public API for.
 
 ## Environment & tooling
 

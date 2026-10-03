@@ -5,30 +5,6 @@
    theme the vault is running instead of hard-coding light or dark.
    ============================================================================== */
 
-.lattice-view {
-	--lattice-gap: 12px;
-	padding: var(--size-4-4);
-}
-
-.lattice-view-hint {
-	margin: 0 0 var(--size-4-4);
-	color: var(--text-muted);
-	font-size: var(--font-ui-small);
-}
-
-.lattice-grid {
-	display: grid;
-	grid-template-columns: repeat(var(--lattice-columns, 3), minmax(0, 1fr));
-	gap: var(--lattice-gap);
-}
-
-.lattice-cell {
-	min-height: 96px;
-	border: 1px solid var(--background-modifier-border);
-	border-radius: var(--radius-m);
-	background-color: var(--background-secondary);
-}
-
 /* ==============================================================================
    The board (Bases view)
    ============================================================================== */
@@ -447,6 +423,18 @@
    carries the class, so no menu prefix is needed. `display: flex` on the item
    is core's own rule and a less specific one, so this wins on specificity. */
 .bases-toolbar-menu-item.lattice-hidden-property {
+	display: none;
+}
+
+/* The board is a `.base` file, and the file explorer is where a file is
+   browsed for — which a board is not. It is opened from the Lattice icon, so
+   its row is not a way in and only clutters the tree. `board-file.ts` marks the
+   row for the file the settings name, and this takes it out of the list.
+   A rule per path cannot be written here: the path belongs to the vault, so
+   the rule carries a class instead and the marking happens in the app.
+   `display: flex` on the tree item is core's own rule and a less specific one,
+   so this wins on specificity. */
+.nav-files-container .nav-file.lattice-hidden-file {
 	display: none;
 }
 

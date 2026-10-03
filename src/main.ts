@@ -1,11 +1,12 @@
-import { Plugin, WorkspaceLeaf } from 'obsidian';
+import { Notice, Plugin, TFile } from 'obsidian';
+import type { WorkspaceLeaf } from 'obsidian';
 import { PropertyMenuHider } from './bases/property-menu';
 import { registerLatticeBasesView } from './bases/register';
 import { BoardViewAdder } from './bases/view-menu';
+import { BoardFileHider } from './board-file';
 import { registerCommands } from './commands';
-import { LATTICE_ICON, VIEW_TYPE_LATTICE } from './constants';
+import { LATTICE_ICON } from './constants';
 import { DEFAULT_SETTINGS, LatticeSettingTab, type LatticeSettings } from './settings';
-import { LatticeView } from './ui/lattice-view';
 
 /**
  * Plugin lifecycle only.
@@ -35,6 +36,16 @@ export default class LatticePlugin extends Plugin {
 	 */
 	readonly viewMenu = new BoardViewAdder();
 
+	/**
+	 * Keeps the board's own `.base` file out of the file explorer.
+	 *
+	 * The board is a file Obsidian has to be able to open, but it is not a
+	 * document to browse for — the icon opens it, whatever it is called. On the
+	 * plugin because it follows a setting, not a view, and outlives every one
+	 * of them.
+	 */
+	readonly boardFile = new BoardFileHider();
+
 	async onload(): Promise<void> {
 		await this.loadSettings();
 
@@ -44,43 +55,76 @@ export default class LatticePlugin extends Plugin {
 		this.viewMenu.start();
 		this.register(() => this.viewMenu.stop());
 
-		this.registerView(VIEW_TYPE_LATTICE, (leaf: WorkspaceLeaf) => new LatticeView(leaf, this));
+		this.boardFile.start();
+		this.register(() => this.boardFile.stop());
 
 		registerLatticeBasesView(this);
 
-		this.addRibbonIcon(LATTICE_ICON, 'Open lattice view', () => {
-			void this.activateView();
+		this.applyBoardFileVisibility();
+
+		this.addRibbonIcon(LATTICE_ICON, 'Open board', () => {
+			void this.openBoard();
 		});
 
 		registerCommands(this);
 		this.addSettingTab(new LatticeSettingTab(this.app, this));
 	}
 
+	/** Match the file explorer to the board file the settings name. */
+	applyBoardFileVisibility(): void {
+		this.boardFile.hide(this.settings.boardFile.trim());
+	}
+
 	/**
-	 * Reveal the grid, reusing an open leaf instead of stacking duplicates.
-	 * Registered views are detached by Obsidian on unload, so there is nothing
-	 * to do in `onunload`.
+	 * Open the board: the `.base` file the settings name.
+	 *
+	 * The icon stands in for that file, so this is the whole of how a board is
+	 * reached — it is why the file is kept out of the file explorer, and why
+	 * this says so plainly when the setting points at nothing.
+	 *
+	 * A leaf already showing the file is revealed instead of a second one being
+	 * opened: the icon means "show me the board", and the board already being
+	 * on screen is the app answering that.
 	 */
-	async activateView(): Promise<void> {
-		const [existing] = this.app.workspace.getLeavesOfType(VIEW_TYPE_LATTICE);
-		if (existing) {
-			await this.app.workspace.revealLeaf(existing);
+	async openBoard(): Promise<void> {
+		const path = this.settings.boardFile.trim();
+		if (path.length === 0) {
+			new Notice('Lattice: no board file is set. Name one in the plugin settings.');
+			return;
+		}
+
+		const file = this.app.vault.getAbstractFileByPath(path);
+		if (!(file instanceof TFile)) {
+			new Notice(`Lattice: no file at "${path}" to open as a board.`);
+			return;
+		}
+
+		const open = this.leafShowing(path);
+		if (open !== null) {
+			await this.app.workspace.revealLeaf(open);
 			return;
 		}
 
 		const leaf = this.app.workspace.getLeaf('tab');
-		await leaf.setViewState({ type: VIEW_TYPE_LATTICE, active: true });
-		await this.app.workspace.revealLeaf(leaf);
+		await leaf.openFile(file);
 	}
 
-	/** Re-render every open grid. Call after anything that changes settings. */
-	refreshViews(): void {
-		for (const leaf of this.app.workspace.getLeavesOfType(VIEW_TYPE_LATTICE)) {
-			const { view } = leaf;
-			if (view instanceof LatticeView) {
-				view.render();
+	/**
+	 * The leaf already showing a file, if one is.
+	 *
+	 * Asked of what each leaf is displaying rather than looked up by view type:
+	 * a `.base` file is only ever shown by core's Bases view, so the path is
+	 * enough, and this does not depend on the name core registered it under.
+	 */
+	private leafShowing(path: string): WorkspaceLeaf | null {
+		let found: WorkspaceLeaf | null = null;
+		this.app.workspace.iterateAllLeaves((leaf) => {
+			if (found === null && (leaf.view as { file?: TFile | null }).file?.path === path) {
+				found = leaf;
 			}
-		}
+		});
+
+		return found;
 	}
 
 	async loadSettings(): Promise<void> {

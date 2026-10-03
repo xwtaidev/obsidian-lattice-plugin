@@ -1,9 +1,9 @@
 # Lattice
 
-**Status: scaffold.** The plugin loads, registers its view, its command and its
-settings tab. The grid currently draws one empty cell per configured column, so
-the settings round-trip is visible on screen — feature work starts in
-[`src/ui/lattice-view.ts`](src/ui/lattice-view.ts).
+**Status: spike.** A board is a Bases view, so it lives in a `.base` file rather
+than in a view of its own; the Lattice icon opens that file, and the file is kept
+out of the file explorer. `docs/board-spike.md` keeps what the spike has settled
+apart from what it has not.
 
 > The description in `manifest.json`, the one in `package.json`, and the
 > "What it does" section below are all placeholders. Replace the three together.
@@ -62,12 +62,27 @@ without saving** command) to pick up the new bundle.
 
 ```
 src/
-  main.ts        lifecycle only: load settings, register view/command/settings tab
+  main.ts        lifecycle only: load settings, register the Bases view, the command and the settings tab
   commands.ts    addCommand calls, one per user-facing action
   settings.ts    the settings interface, its defaults, and the settings tab
-  constants.ts   stable ids (plugin id, view type, icon)
+  constants.ts   stable ids (plugin id, icon, the default board file)
+  board-file.ts  keeps the board's `.base` file out of the file explorer
+  bases/
+    register.ts            registers the board as a Bases view
+    lattice-bases-view.ts  the board itself: columns, cards, both drags, the menus
+    grouping.ts            columns and their order, pure functions with tests
+    description.ts         the note's opening paragraph, read for a card
+    search-scope.ts        widens a board's search to the card titles
+    board-properties.ts    which properties a board deals in
+    property-menu.ts       keeps core's property menu down to those
+    view-menu.ts           makes core's "Add view" add a board
+    value-colors.ts        one colour per value, out of Obsidian's own eight
+    drawer-action.ts       the "open in a new tab" button a sidebar preview wears
   ui/
-    lattice-view.ts  the grid
+    confirm-modal.ts       a confirmation dialog (core has no public one)
+    text-prompt-modal.ts   a one-line prompt (core has no public one)
+examples/
+  lattice-board.base       a base to try the board view on
 ```
 
 ## Releasing
