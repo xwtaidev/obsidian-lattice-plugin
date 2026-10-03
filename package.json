@@ -1,7 +1,7 @@
 {
 	"name": "obsidian-lattice-plugin",
 	"version": "0.1.0",
-	"description": "Placeholder description. Replace this with a one line summary of what Lattice does.",
+	"description": "A kanban board of your notes. Columns are the values of a property, cards are notes, and dragging a card into a column writes that value back to the note.",
 	"main": "main.js",
 	"type": "module",
 	"scripts": {

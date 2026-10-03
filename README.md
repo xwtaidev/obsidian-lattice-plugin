@@ -5,17 +5,15 @@ than in a view of its own; the Lattice icon opens that file, and the file is kep
 out of the file explorer. `docs/board-spike.md` keeps what the spike has settled
 apart from what it has not.
 
-> The description in `manifest.json`, the one in `package.json`, and the
-> "What it does" section below are all placeholders. Replace the three together.
-
 ## What it does
 
-_Placeholder._ Write it for someone scrolling the community plugin directory:
-one or two sentences, no marketing.
+A kanban board of your notes. Columns are the values of a property, cards are
+notes, and dragging a card into a column writes that value back to the note.
 
-`manifest.json` has a 250 character budget for this, and the directory rejects a
-submission whose description contains the word "Obsidian", an em dash, a colon,
-a quote, or an emoji. `npm run check:manifest` enforces all of that.
+The same sentence is the one in `manifest.json` and `package.json`. It is
+deliberately plain: the directory listing gives it a 250 character budget, and
+it rejects a description containing the word "Obsidian", an em dash, a colon, a
+quote or an emoji. `npm run check:manifest` enforces each of those.
 
 ## Installation
 
