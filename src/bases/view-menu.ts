@@ -24,6 +24,11 @@
  * This is a patch, and it fails quietly by design. With no board on screen, no
  * config, or a changed shape up top, the click is left alone and core adds the
  * table it wanted to add. Nothing errors.
+ *
+ * The view menu is hidden on a board for now, by the toolbar rule at the end of
+ * styles.css, so none of this runs until it is shown again. It is kept because
+ * what is temporary is the entry point, not the intent: whenever the button
+ * comes back, adding a board is what it should do.
  */
 
 import type { BasesViewConfig } from 'obsidian';

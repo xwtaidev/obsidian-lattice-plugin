@@ -438,24 +438,28 @@
 	display: none;
 }
 
-/* Sort and filter are not board features yet. Core draws one toolbar for the
-   view under it, and those two buttons front a table's questions — order the
-   rows, hide the ones that do not match. A board answers both with its columns
-   instead, so the buttons lead somewhere the board cannot follow. They are out
-   until it can. Delete this rule when it can.
+/* Sort, filter and the view menu are not board features yet. Core draws one
+   toolbar for the view under it, and each of these buttons fronts a question a
+   board either answers elsewhere or cannot answer at all: sort and filter order
+   and hide rows, where a board orders itself by its columns, and the view menu
+   builds a table whatever a plugin registers — so a board is one view, and a
+   second one to switch to would be a table. They are out until they can.
+   Delete this rule when they can.
 
    The toolbar is a *sibling* of the view it belongs to, not an ancestor of it,
    so a plain descendant rule cannot reach it. `:has()` walks sideways: our
    container is the `.bases-view` element core hands the view, and it carries
    `.lattice-board`. Scoping it that way keeps the buttons in the table and
-   card views, which do answer for sort and filter — a plugin-wide rule would
-   take them out of every base in the vault.
+   card views, which do answer for all three — a plugin-wide rule would take
+   them out of every base in the vault.
 
-   Core hides the sort button the same way for print, so the class on that item
-   is core's own and not a guess. Both classes are on the `.bases-toolbar-item`
-   div, and `display: flex` there is core's rule at a lower specificity. */
+   All three classes are core's own, put on the `.bases-toolbar-item` div by the
+   same call that puts them on the menu they open. Core hides the sort button
+   this way for print, and the other two are set as each menu is built.
+   `display: flex` there is core's rule at a lower specificity. */
 .bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-sort-menu,
-.bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-filter-menu {
+.bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-filter-menu,
+.bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-views-menu {
 	display: none;
 }
 
