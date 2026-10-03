@@ -9,8 +9,22 @@
 /** Matches `id` in manifest.json and the folder name under `.obsidian/plugins/`. */
 export const PLUGIN_ID = 'lattice';
 
-/** Obsidian's built-in icon name, used for the ribbon button and the tab. */
-export const LATTICE_ICON = 'layout-grid';
+/**
+ * The icon on the ribbon button, and the one the board's Bases view type is
+ * registered under, out of the set Obsidian draws its own buttons with.
+ *
+ * Three columns of different heights inside a rounded frame. The frame is what
+ * makes it read as a panel rather than a bare glyph, which keeps it apart from
+ * the four equal squares (`layout-grid`) that half the plugin ecosystem wears;
+ * the columns are the board itself.
+ *
+ * The names are Lucide's, as of whatever version Obsidian bundles, and they are
+ * not stable between versions — this same icon is `square-kanban` in current
+ * Lucide and `kanban-square` here. A name Obsidian does not know is not an
+ * error: `setIcon` empties the element and draws nothing at all. `getIconIds()`
+ * is what to check a new name against.
+ */
+export const LATTICE_ICON = 'kanban-square';
 
 /**
  * The `.base` file the ribbon icon opens, until the user names another one.
