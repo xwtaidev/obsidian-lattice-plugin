@@ -14,7 +14,10 @@
 | `src/bases/lattice-bases-view.ts` | 视图本体：列头、卡片、两种拖拽、列菜单、新增列、描述的异步回填 |
 | `src/bases/grouping.ts` | 分组、列顺序/移除/新增/重排、写回规则，纯函数、无 DOM 无副作用，可直接单测 |
 | `src/bases/description.ts` | 从笔记正文里取出卡片要显示的那一段，纯函数，可单测 |
+| `src/bases/search-scope.ts` | 让搜索连卡片标题一起搜（核心的搜索范围写死在视图的 order 上） |
+| `src/bases/drawer-action.ts` | 侧栏预览右上角那个「放大」按钮的图标与文案（侧栏 header 是隐藏的，按钮只能自己画） |
 | `src/bases/value-colors.ts` | 一个值一种颜色，颜色取自 Obsidian 自己的八色 |
+| `src/board-file.ts` | 把看板那个 `.base` 从文件树里藏掉（核心没有「藏一个文件」的 API），以及「看板文件」这个设置的载体 |
 | `src/ui/confirm-modal.ts` | 二次确认弹窗（Obsidian 公开 API 里没有 confirm） |
 | `src/ui/text-prompt-modal.ts` | 问一行文字的输入弹窗（同上，公开 API 里没有 prompt）；可选现成答案胶囊也在这里 |
 
@@ -150,6 +153,7 @@ Backlog 不再是第一个出现的值，于是整块板重排，新列还插到
 | 操作 | 结果 |
 | --- | --- |
 | 点卡片 | 笔记开在右侧边栏，边栏自动展开 |
+| 点侧栏右上角的放大按钮 | 主区域新标签页打开同一篇（已经开着就直接切过去）。抽屉这一篇随之收掉，边栏若空则折起来 |
 | Cmd/Ctrl + 点卡片 | 主区域新标签页，全页打开 |
 | 点卡片里的链接 / 标签 | 交给那个链接本身，不会额外打开卡片所属的笔记 |
 
@@ -161,8 +165,27 @@ Backlog 不再是第一个出现的值，于是整块板重排，新列还插到
 - **卡片里点链接的守卫**：卡片上的值是真实链接（标签、内链、日期），`value.renderTo` 渲染出来的
   它们自己会响应点击。若不拦，点一个标签会既触发标签搜索、又冒泡上来打开这篇笔记。
 - **打开模式保持用户偏好**，没有强行切到阅读视图：`openFile` 不带 `openState`。
-- **「放大」交给 Obsidian 原生行为**：把边栏里的 tab 拖到主区域，它就变成主区域的标签页。
-  这条依赖原生拖拽，**未验证**（见下）。确定可用的是 Cmd/Ctrl + 点卡片那条路径 —— 它由我们控制。
+- **侧栏里的「放大」按钮是自己画的，因为侧栏的 header 整个是隐藏的。** 真机量到侧栏 leaf 的
+  `.view-header` 是 `display: none`（`getClientRects()` 为 0）—— Obsidian 在侧栏里不画标题条，于是
+  view 自己的那三个按钮（书签、阅读模式、更多）**也一起看不见**。`ItemView.addAction` 写的正是
+  `.view-actions`，所以它在侧栏里等于写进一个看不见的地方。**这里翻过一次车**：自动化断言查了
+  「按钮在 DOM 里、回调能触发」就以为成了，**没量可见性**。现在按钮走 `containerEl.createEl`，
+  靠 `.lattice-with-new-tab`（容器转 `relative`）+ `.lattice-new-tab`（绝对定位在右上角）画出来，
+  并复用 Obsidian 自己的 `clickable-icon` 类保持观感一致。图标 `maximize-2`，标签按语言
+  （`在新标签页中打开` / `在新分頁中開啟` / `Open in a new tab`）。
+- **它只加在右栏**（`leaf.getRoot() === workspace.rightSplit`）：按钮的意思是「出抽屉」，被拖进主区域的
+  tab 已经在外面了。
+- **按「已经开着就切过去」处理**：先在主区域找显示同一篇的 leaf，找到就 `revealLeaf`，否则才
+  `openLinkText(..., 'tab')`。不这么做，按两次就留下两个同名标签页。
+- **放大之后抽屉自己让位**：笔记既然有了自己的页面，抽屉再留着就是同一篇显示两遍，还白占一列屏幕。
+  所以 `openInMainArea` 走完就把那片 leaf `detach()` 掉 —— 边栏空了就自己折回去（这正是「出抽屉」的
+  形状）。**只 detach 自己那一片**，判据是 `leaf.getRoot() === workspace.rightSplit`；用户自己放在侧栏的
+  反链面板是用户的，侧栏里还站着别人时也不替它折。注意这是**插件主动做**，不是等 Obsidian 碰巧收 ——
+  上次用户看到的就是「碰巧会收」，行为不确定也不可解释。
+- **按钮问的是抽屉现在显示哪一篇**（`leaf.view.file`），不是点卡片时记下的那篇 —— 在预览里跟着链接
+  翻过几页之后，它仍然指「现在这一篇」，这时正是一个全页更值的时候。
+- **按钮的生命周期跟着抽屉**：leaf 复用，view 也复用，所以每次开预览前先摘掉上一个按钮（连同容器上的
+  类），否则点一圈卡片会在侧栏角落堆一排。leaf 被关掉时按钮随 DOM 消失，引用失效后再摘一次是无害的。
 
 ## 卡片的样子与标签的颜色
 
@@ -256,6 +279,63 @@ Bases 给不出正文。它能给的属性只有三种来源 —— `note.*`（f
 视图配置里有 **Show note description**（`latticeShowDescription`，默认开）—— 一个全是「标题 +
 一句话」的 vault 可以关掉它。
 
+## 看板文件、卡片文件夹、入口
+
+三件事其实是同一件事的三个面：**看板就是一个 `.base` 文件，卡片就是一批普通笔记。**
+
+| 面 | 落在哪 | 谁决定 |
+| --- | --- | --- |
+| 看板本身 | 一个 `.base` 文件（默认 `lattice-board.base`） | 插件设置 **Board file** |
+| 从哪进 | 左侧 ribbon 的 Lattice 图标（以及命令 `lattice:open-board`） | 插件 `main.ts` 的 `openBoard()` |
+| 卡片放哪 | 一个普通文件夹（`lattice-cards`） | `.base` 顶层的 `newItemFolder` |
+
+**入口只有一个，所以那个文件不该待在文件树里。** 文件树是「找文件」的地方，而 `.base` 不是要打开的文档，
+是应用自己的一块屏 —— 它出现在树里只会让人以为那是该点的东西。所以插件把它的那一行藏掉
+（`src/board-file.ts`）。三条路都不通才走到这一步：核心没有「藏一个文件」的 API；「排除文件」管不到文件树
+（见发现 25）；`<style>` 元素被社区规范禁掉（`obsidianmd/no-forbidden-elements`，lint 直接报错）。
+剩下能用的做法是**观察文件树 + 给那一行打一个类**，类写在 `styles.css` 里 —— 也就是 `property-menu.ts`
+那套。**失效方向是安全的**：类名或选择器哪天对不上，文件自己回到树里，`+` 和拖拽都不受影响。
+
+**新卡片落在哪个目录，是 `.base` 的键，不是插件的代码。** `createFileForView` 把活交给核心的
+`newItemMenu.open()`，它按这个顺序挑目录：
+
+```
+newItemFolder → newItemTemplate 所在的目录 → 由 query/view 推出来的目录 → Obsidian「新笔记默认位置」
+```
+
+**所有列共用这一个目录**，未分组列也一样 —— 先在文件夹里建出笔记，再写分组属性的值（见发现 26）。
+这是核心自己的能力，插件一行都不用写；自己接管反而会丢掉核心的新建卡片小弹窗和模板。
+
+**一个还没做的取舍：文件夹不存在时不说一句话。** 真机量过（见发现 26）：指向一个不存在的目录，
+`+` 就是「什么都不发生」，没有 Notice 也没有报错。修它需要在按 `+` 那一刻知道**当前看板是哪个
+`.base`**，好把它的 `newItemFolder` 读出来先建目录 —— 而 `QueryController` 的类体是空的、视图也拿不到
+自己的文件（发现 1 的同一条限制），所以现在没有干净的地方去做这件事。要做的话，得先解决「视图怎么知道
+自己是哪个 `.base`」。
+
+### 图标
+
+入口只有一个图标，所以它得同时说清两件事：**这是一块板**，而且**它是个能打开的东西**。
+`LATTICE_ICON = 'kanban-square'`（`constants.ts`）—— 圆角外框里三根高低不等的竖条。竖条是看板本身，
+外框把它从「一个记号」变成「一块面板」，也就和半个插件生态都在用的四等分方块区分开了。这个常量同时喂
+ribbon 按钮和 Bases 视图类型的注册，两处是一个图标。
+
+**`layout-*` 那一族已经被核心占住了。** 真机读运行中实例的 ribbon 类名可以直接看到：「新建白板」戴的是
+`lucide-layout-dashboard`、「新建数据库」戴的是 `lucide-layout-list`。原来的 `layout-grid` 既是那个
+烂大街的形状，又紧挨着核心自己的词汇 —— 换到 kanban 这一族，落点干净。姊妹插件的「打开周看板」用的是
+`calendar-days`，两者也不打架。
+
+两个关于图标名的坑（细节见发现 27）：
+
+- **名字是 Obsidian 打包的那版 Lucide，跨版本会变。** 同一个图标在现在的 Lucide 里叫 `square-kanban`，
+  在 Obsidian 1.12.4 里叫 `kanban-square`。改名之前先对着 `getIconIds()` 查。
+- **名字不认识不报错。** `setIcon` 是「清掉旧的、取新的，取到 null 就结束」—— 拼错一个字母，按钮变成
+  空白，没有异常也没有日志。所以它只能靠量 DOM 来验。
+
+验证方式是**比对指纹**：复制库 + 独立 profile + CDP 量运行中的 ribbon 按钮，拿到
+`class="svg-icon lucide-kanban-square"`、`1 个 rect（18×18 rx=2）+ 3 条 path（M8 7v7 / M12 7v4 / M16 7v9）`、
+`getClientRects()=1`、盒子 18×18 —— 与从 `app.js` 里抽出来的图标数据逐字一致。被换掉的 `layout-grid` 是
+**4 个 rect、0 条 path**，所以这组数字是能区分开的，不是「有东西画出来就算过」。
+
 ## 怎么试
 
 ```bash
@@ -265,7 +345,8 @@ npm run deploy -- <vault-path>
 
 然后在 Obsidian 里：
 
-1. 把 `examples/lattice-board.base` 拷进 vault 任意目录，打开它。视图类型已经写成 `lattice-board`。
+1. 在 vault 里建一个文件夹叫 `lattice-cards`（新卡片落在那儿，见发现 26），然后把
+   `examples/lattice-board.base` 拷进 vault 任意目录，打开它。视图类型已经写成 `lattice-board`。
 2. 若显示的不是看板，用视图右上角切换到 **Lattice board**。
 3. 打开视图配置菜单，在 **Group by** 里选一个属性（比如 `status`）。列会按该属性的值分出来。
 4. **点一张卡片**：笔记应该出现在**右侧边栏**，边栏自动展开，而主区域的看板**原封不动**。
@@ -315,17 +396,39 @@ npm run deploy -- <vault-path>
     最右边那一列，列头写着 **`未分组`**（中文界面；英文界面是 `Ungrouped`），而不是 `null` ——
     而且它**不是**一枚胶囊（没有值的列不该有颜色）。把这张卡往别的列拖，属性会被写上；
     往这一列拖，属性会被**删掉**。卡片上那一格没值的属性行应该显示 `—`。
-23. **看工具栏**：看板视图的工具栏上，**排序**和**筛选**两个按钮应该不见了（它们对看板没有意义，
-    等板子自己支持了再放回来）；**视图**、结果计数、**属性**、**新建**都还在，位置和以前**完全一样**
-    （不留空洞）。把同一个 `.base` 切到**表格**视图，这两个按钮应该**回来** —— 规则只挂在看板上。
-24. **看「添加视图」**：在**看板**里点工具栏的视图按钮，菜单底下那一项（`+ 添加视图`）点下去。
+23. **看工具栏**：看板视图的工具栏上，**排序**、**筛选**、**视图**三个按钮都不见了 —— 前两个对看板没有
+    意义，视图那个是连入口一起先收起来（见步骤 24）；**结果计数、属性、新建**都还在。右边那组按钮的
+    位置**一像素不变**（结果计数的 `auto` 边距顶着）；**左边不一样**：视图按钮原本就在最左，它消失后
+    结果计数会左移一格、贴到工具栏左端。把同一个 `.base` 切到**表格**视图（临时在 `.base` 里加一个
+    `type: table` 的视图），这三个按钮应该**回来** —— 规则只挂在看板上。
+24. **看「添加视图」（要先把入口放回来）**：视图按钮已经藏了，所以这一步得先删掉 `styles.css` 末尾那条
+    `:has()` 规则里的 `bases-toolbar-views-menu` 一行再 `npm run deploy`，然后才谈得上「点视图按钮」。
+    在**看板**里点工具栏的视图按钮，菜单底下那一项（`+ 添加视图`）点下去。
     应该**直接多出一个看板视图**（叫 `Board`、`Board 2`……），并且**当前视图已经切到它** ——
     不会出现核心那个「配置视图」页，更不会多出一个**表格**视图。反复点几次，名字应该往后数。
     注意这只在看板的工具栏里成立：把同一个 `.base` 切到**表格**视图再点，加出来的仍是表格视图
     （那是核心自己的行为，我们没有接管）。
+25. **搜一张卡片的标题**：点工具栏的搜索按钮（放大镜），在出现的输入框里输入**卡片标题里的一个词**
+    （比如「拖拽」）。应该**只剩那几张卡片**，输入框右边写着「显示 N」。清空后全部回来。
+    再输一个**字段值**（比如 `High`）应该照样搜得到 —— 加标题是往上加，不是替换。
+    输一个谁都词都没有的字符串，应该是 0 张、看板空、旁边写「显示 0」。
+26. **点卡片，再点侧栏右上角的放大按钮**：点一张卡片，笔记开在右侧边栏。**侧栏内容区的右上角**应该有
+    一个圆角小按钮，图标是斜着向外的两个箭头（`maximize-2`），悬停写着「在新标签页中打开」。点它 ——
+    主区域应该开出一个**同名的新标签页**，显示同一篇笔记，**抽屉跟着收起**（那一篇不再在侧栏显示第二遍；
+    侧栏里只剩它自己那一片，所以边栏折回去了）。
+    连点两次**不应该**开出两个同名标签页（第二次直接切到已经开着的那个）。
+    再点另一张卡片：侧栏换笔记，右上角**仍然只有一个**放大按钮（不是两个、三个），点它开的是**新的那篇**。
+    把侧栏里的预览跟着链接翻到另一篇，再点按钮：开的应该是**当前显示的那篇**。
+    用户自己在侧栏开的别的面板（反链等）**不该**被顺手关掉 —— 收的只是 Lattice 自己那一片。
+27. **点左侧 ribbon 的 Lattice 图标**：应该直接打开看板 —— 已经开着就切过去，**不会**开出第二个标签页；
+    关掉再点，才新开一个。**同时看文件树**：里面**不该**有 `lattice-board.base` 这一行（文件夹和笔记照常
+    显示）。再造一个别的文件，确认新出现的那一行**没有**被误藏 —— 藏的是那一个路径，不是一类文件。
+28. **看新卡片落在哪**：在**任意一列**的列头点 `+`。新笔记应该在 `lattice-cards/` 里；有值的列还会把值
+    写进 frontmatter（未分组列不写）。**先确认 `lattice-cards` 这个文件夹真的存在** —— 指向一个不存在的
+    文件夹时，`+` 是「什么都不发生」，没有提示、没有报错（见发现 26）。
 
 ```bash
-npm test        # 纯函数断言（node:test + esbuild，无第三方框架）：描述提取 + 列的分组规则 + 属性白名单 + 视图命名
+npm test        # 纯函数断言（node:test + esbuild，无第三方框架）：描述提取 + 列的分组规则 + 属性白名单 + 视图命名 + 搜索范围 + 放大按钮的文案
 ```
 
 ## 已验证 / 未验证
@@ -335,8 +438,9 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
 - `npm run build` —— 类型检查 + 打包通过，说明所有 API 签名都对得上
 - `npm run lint` —— 0 error
 - `npm run check:manifest` —— 全绿
-- `npm test` —— **90 条**断言全过（`description.test.ts` 30 条 + `grouping.test.ts` 48 条 +
-  `board-properties.test.ts` 3 条 + `property-menu.test.ts` 4 条 + `view-menu.test.ts` 5 条）。运行器是
+- `npm test` —— **97 条**断言全过（`description.test.ts` 30 条 + `grouping.test.ts` 48 条 +
+  `board-properties.test.ts` 3 条 + `property-menu.test.ts` 4 条 + `view-menu.test.ts` 5 条 +
+  `search-scope.test.ts` 4 条 + `drawer-action.test.ts` 3 条）。运行器是
   `scripts/test.mjs`：把 `src/**/*.test.ts` 用 esbuild 打成 ESM 丢进临时目录，再 `node --test` 跑；
   不引第三方框架。`grouping.test.ts` 收的是原先躺在 `/tmp` 的那批一次性断言（分组、移除、显式顺序、
   `moveColumn` 的边界、`reorderByDrop` 的全部 32 种落点）加上新增列的新用例 —— **`/tmp` 那份已经搬空**。
@@ -411,7 +515,56 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
   日期无边框无输入框底色、日期行与文字行同高、日期与同一行的值同字号且不是 13px、
   Add column 文字与列名同线）在两个主题下全过。
 
-**未验证，需要真机确认**（我这边跑不了 Obsidian）：
+**真机取证：复制库 + 第二个实例 + CDP（2026-10-03 走通）。**
+
+复制一份测试库出来，用一个**独立的 `--user-data-dir`**（里面只写一份指向那个副本的 `obsidian.json`）
+起第二个 Obsidian，加 `--remote-debugging-port`，再用 CDP 读活的 DOM 和活的对象。Node 22 自带全局
+`WebSocket`，**不需要** playwright / puppeteer。三个环境上的坑：沙箱里必须带
+`--no-sandbox --disable-gpu --disable-gpu-sandbox --disable-software-rasterizer`（否则 GPU 进程起不来，
+主进程直接 `FATAL: GPU process isn't usable`）；`curl` 要 `--noproxy '*'`（agent shell 里挂着
+`HTTP_PROXY`，对 127.0.0.1 也生效）；**插件热重载不够** —— disable/enable 之后核心手里拿的仍是旧插件
+建的那个视图实例，`main.js` 换了也不生效，**要重启实例**（`pkill -f "user-data-dir=<临时目录>"`）。
+
+从此以后，「核心 DOM 长什么样」不再只能从 `app.js` 里推。已经拿到的（全部是读活物，不是读 bundle）：
+
+- **工具栏 7 个按钮的类名**，全部落在 `div.bases-toolbar-item` 上：`bases-toolbar-views-menu`、
+  `bases-toolbar-results-menu` + `bases-toolbar-result-count`、`bases-toolbar-sort-menu`、
+  `bases-toolbar-filter-menu`、`bases-toolbar-properties-menu`、`bases-toolbar-search`、
+  `bases-toolbar-new-item-menu`。
+- **`.bases-view` 带 `data-view-type` 与 `data-view-name`**（看板是 `lattice-board` / `Board`），
+  而 `render()` 贴上的 `.lattice-board` 就在同一个元素上。
+- **工具栏与 `.bases-view` 确实是兄弟** —— `:has(~ .bases-view.lattice-board)` 真的命中了：排序 /
+  筛选 / 视图三个按钮读出来都是 `getComputedStyle().display === 'none'`。
+- **`config.getOrder()` 交出的是规范化过的 id**：`.base` 里手写 `等级` / `priority`，读出来是
+  `note.等级` / `note.priority`；而 `data.properties` 里**只有** order 里的那几个。
+- **`controller` 的内部形貌**：自有字段 `query` / `results`（Map，全量）/ `view` / `viewName` /
+  `searchQuery` / `initialScan` / `ctx` / `queue`；`getSearchQuery` / `updateSearchQuery` /
+  `applySearchQuery` / `notifyView` 都在**原型**上。`controller.view.config` 就是核心交给视图的那一份。
+- **核心把结果按 `file.name` 排序**（本机 locale 下是拼音序），不是按 path —— 拿
+  `localeCompare(path)` 排是对不上的。
+- **搜索框的 `input` 事件就是那条路**：派一个 `new Event('input')` 与手打等价，打开 → 输入 → 重算
+  整条链都能走通（发现 23 就是这么量的）。
+- **侧栏 leaf 的 `.view-header` 是 `display: none`**（`getClientRects()` 为 0，盒子 0×0），主区域的
+  则是正常显示的。这是「放大按钮为什么看不见」的答案：`ItemView.addAction` 写的正是那个 header 里的
+  `.view-actions`，写进去等于写进视野之外 —— 核心自己的书签 / 阅读模式按钮也在那儿，一样看不见。
+  侧栏 leaf 的 `.workspace-leaf-content` 读出来是 `position: relative`，所以往它里面放绝对定位的元素
+  是安全的；代码仍自己加一个类来定这个位，免得哪天核心改了那个值。
+- **量「有没有画出来」不能只查 DOM。** 上面那条之所以是坑，是因为断言查的是
+  `querySelector(...) !== null` 与「回调能被触发」，两样都通过，而按钮是 `display: none` 的父元素里的
+  一个 0×0 元素。**判据是 `getClientRects().length`，再加一次 `document.elementFromPoint(中心)` 看
+  返回的是不是它自己**（前者证明有盒子，后者证明没有东西压在上面）。
+- 一条**没走通**的：对 `display: none` 的视图按钮调 `.click()` **打不开菜单**。所以「菜单内部」那几样
+  （属性菜单的 `mod-implicit` 标记、视图菜单的行结构）**到现在仍然没有真机证据**。
+- **文件树那一行的形貌（2026-10-03 新增）**：`data-path` 在 `.nav-file-title` 上，`.nav-file` 自己没有；
+  打了类的 `.nav-file` 读出 `getClientRects().length === 0`、`display: none`。树重建（`vault.create`）
+  之后标记仍在，且新文件那行是 `display: block` —— 只藏了那一个路径。
+- **点 ribbon 图标开看板（2026-10-03 新增）**：已经开着时按 → 标签页数不变（`bases` leaf 仍是 1）；
+  关掉再按 → 新开一个，主区域、`data-view-type="lattice-board"`、4 列、高度 682；再按 → 仍然只有 1 个。
+  插件的设置读出来是 `{boardFile: 'lattice-board.base'}`，命令只有 `lattice:open-board`
+  （旧那个 `lattice:open-view` 已经不在），设置页只有一条 **Board file**。
+- **新卡片落点（2026-10-03 新增）**：见发现 26，两列各自的 `+` 都落在 `lattice-cards/`。
+
+**未验证，需要真机确认**：
 
 - `containerEl` 的生命周期。`onDataUpdated` 每次都整个重建 DOM，如果 Bases 在编辑过程中触发更新，正在输入的内容可能被吞掉。
 - `Value.renderTo` 在窄卡片里的观感（长值会不会撑破）
@@ -426,21 +579,30 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
   并把 `note.priority` 规范成 `priority`）—— 所以别拿「文件里长什么样」当代码写入了什么的证据，
   要看 key 在不在。剩下待确认的是**重开视图后顺序是否还在**。
 - **列头按钮的点击会不会穿透到列本身。** 用了 `stopPropagation`，未实测。
+- **看板文件被改名或搬走之后，插件跟不上。** 设置里存的是**路径字符串**，不是文件引用：改名之后文件树
+  那一行会自己回来（新的路径没人藏），点图标则弹「no file at "lattice-board.base" to open as a board」。
+  要么在设置页里做个文件选择器，要么监听 `rename` 事件顺手改设置。另外**换一个看板**（设置指向别的
+  `.base`）也是同一个手动步骤，没做过。
+- **藏文件这件事只覆盖主窗口。** `document.head` / `document.body` 拿的是主窗口那一份，弹出式窗口有自己的
+  文件树，那里面这一行不会藏（`property-menu.ts` 同样只覆盖主窗口）。要覆盖得多留一份 `<style>` 或每窗口
+  各观察一遍，现在没做。另外**插件加载时文件树折叠着、或文件树面板根本没开**这两种起手也没单独量过 ——
+  观察器那一支已经证明能用（见「真机取证」），理论上同一条路。
+- **空路径时的行为没在设置页上手动走过。** 把 Board file 清空 → 存回默认名 `lattice-board.base`
+  （空框按「还在打字」处理）。这一段只有类型检查。
 - **Add column 那条路只做过静态检查。** 按钮按下即弹窗（这一版把中间的菜单去掉了）、输入框的初始
   焦点、回车提交、空名字时确定键是灰的、弹窗里的 `Restore "…"` 胶囊按下去即以该名字作答 ——
   这些只有类型检查、lint 和离屏渲染保证，没在真机上点过。
-- **属性菜单那层补丁，真实 DOM 我这边看不到。** 容器归属（类加在按钮 + 菜单两个元素上、菜单被
-  `appendChild` 到 `body`）、`mod-implicit` 标记、项名节点，全部是从 `obsidian.asar` 抽出来的
-  `app.js` 里逐行读出来的，静态推理成立，但没有在真机上肉眼确认过。要拿到真证据只有两条路：
-  **① 让插件把菜单结构写进一个文件再回读**（需要点一次菜单）；**② 拿一个复制出来的测试库，
-  用 `--remote-debugging-port` 起第二个 Obsidian 实例，走 CDP 读活 DOM**（不用碰用户正在用的那份）。
+- **属性菜单的内部结构仍然只有静态推理。** 工具栏那半边已经验证了（那个类确实同时落在按钮与菜单
+  两个元素上，见上），但**菜单本体里**的东西 —— `mod-implicit` 标记、项名节点、`appendChild` 到
+  `body` —— 还没有真机证据：要等菜单真被打开才有东西可看，而程序化点击打不开菜单（见上）。
+  得真人点一次，或者让插件把菜单结构写进一个文件再回读。
 - **`setIcon` 出来的 svg 是否带 `--icon-size` 以外的尺寸干扰。** 离屏是照着手写的 svg 量的
   （14px 正确），真机上 `setIcon` 产物的 class 组合一致，理论上一样。
-- **工具栏「兄弟关系」也是从源码读出来的**，同样没在真机上看过：`.bases-header` 与 `.bases-view`
-  同属一个父元素、前者在前，是从 `app.js` 的构造顺序读出来的（离屏工装按这个结构复刻，量出来的
-  是这套结构的自洽性，不是真机 DOM）。**失效方向是安全的** —— 哪天核心把 `.bases-view` 挪进一层
-  包装，`:has(~ …)` 不再匹配，两个按钮就重新出现，不会误伤别处。
-- **「添加视图」的接管同样没在真机上验过。** 菜单名（`.menu.bases-toolbar-views-menu`）、
+- **`:has(~ …)` 哪天不再匹配，失效方向是安全的**（兄弟关系本身已经是真机事实了，见上）：核心一旦把
+  `.bases-view` 挪进一层包装，规则不命中，那三个按钮就自己回来，不会误伤别处。
+- **「添加视图」的接管同样没在真机上验过 —— 而且现在整条路被 CSS 挡着。** 视图按钮在看板上被藏了
+  （见发现 21），接管的触发条件因此不可达，所以这一段代码目前处于「看着没人调用、也没有运行时影响」的
+  状态。要验它得先取消隐藏。菜单名（`.menu.bases-toolbar-views-menu`）、
   `has-active-menu` 落在工具栏上、行结构（`info-icon > svg.lucide-plus`）、搜索框是整个列表的
   重绘开关 —— 四条全部是从 `obsidian.asar` 抽出的 `app.js` 里逐行读的
   （`HY.prototype.addClass`、`zY.prototype.setOpen`、`r$.prototype.renderSuggestion`），
@@ -548,9 +710,12 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
     还有：**核心的语言包是「按行对齐的平铺文本」**（`obsidian.asar` 的 `i18n/*.txt`，英文即键、
     没有 en.txt），所以想查某个键的中文，得先知道它在键列表里的行号再取同行的 zh 文本；
     本轮没走通这条路，最后用 `getLanguage()` 自己判断语言。
-21. **工具栏的排序 / 筛选按钮藏掉了，做法是 CSS 而不是 JS 补丁。** 这两个按钮对看板没有意义（排的是
-    表格的问题，看板用列来回答），用户要求先收起来、等板子自己支持了再说。关键事实是**工具栏不在
-    视图容器里面，而是它的兄弟节点** —— 核心的构造顺序是：
+21. **工具栏的排序 / 筛选 / 视图三个按钮藏掉了，做法是 CSS 而不是 JS 补丁。** 排序和筛选对看板没有
+    意义（排的是表格的问题，看板用列来回答），用户要求先收起来、等板子自己支持了再说；**视图菜单连
+    入口一起先收起来**（用户：「这个功能暂时隐藏」）—— 虽然「添加视图」已被接管成只加看板，但既有
+    `.base` 里通常还躺着几个核心早期建的**表格**视图，能切过去就等于掉出看板，而看板也还没打算回答
+    「多视图」这件事。三条规则写在同一个选择器组里。关键事实是**工具栏不在视图容器里面，而是它的
+    兄弟节点** —— 核心的构造顺序是：
 
     ```js
     var a = (o.viewHeaderEl = i.createDiv({cls:"bases-header"})).createDiv({cls:"bases-toolbar"});
@@ -565,21 +730,28 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
 
     ```css
     .bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-sort-menu,
-    .bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-filter-menu
+    .bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-filter-menu,
+    .bases-header:has(~ .bases-view.lattice-board) .bases-toolbar-item.bases-toolbar-views-menu
     ```
 
-    **为什么要限定在看板上**：排序和筛选是**每一个** Bases 视图的按钮，一条不分视图的规则会把表格
-    视图的按钮一起拿走（而筛选还是 `.base` 级的 `filters:`，表格正在用）。限定之后别的视图照旧。
+    **为什么要限定在看板上**：这三个都是**每一个** Bases 视图的按钮，一条不分视图的规则会把表格视图
+    的按钮一起拿走（而筛选还是 `.base` 级的 `filters:`，表格正在用）。限定之后别的视图照旧 ——
+    `styles.css` 末尾那段注释里留着「放回来的时候把这一整块删掉」。
 
-    两个类名都是核心给的、不是猜的：类名的落点是 `VY` 建的
-    `this.containerEl = e.createDiv("bases-toolbar-item")`（`.text-icon-button` 是它的孩子），而核心
-    自己在打印模式下就是这么藏排序按钮的 —— `.print .bases-toolbar .bases-toolbar-item.bases-toolbar-sort-menu
+    三个类名都是核心给的、不是猜的：类名的落点是 `VY` 建的
+    `this.containerEl = e.createDiv("bases-toolbar-item")`（`.text-icon-button` 是它的孩子）。视图菜单
+    那个类是同一个落点：`HY.prototype.addClass = function(e){ this.button.addContainerClass(e);
+    this.menu.menuEl.addClass(e) }`，视图菜单构造出来紧接着就 `o.addClass("bases-toolbar-views-menu")`
+    —— 一个类名同时落在**按钮容器**和**菜单本体**两处，这正是 `view-menu.ts` 必须用 `.menu.bases-toolbar-views-menu`
+    而不是 `.bases-toolbar-views-menu` 去认菜单的原因（按钮在文档顺序里在前）。
+    核心自己在打印模式下就是这么藏排序按钮的 —— `.print .bases-toolbar .bases-toolbar-item.bases-toolbar-sort-menu
     { display: none }`。特异度也够：核心 `.bases-toolbar .bases-toolbar-item { display: flex }` 是 (0,2,0)，
-    我们这条是 (0,5,0)。
+    我们这条 (0,5,0) 覆盖它绰绰有余。
 
-    一条差点把结论写反的账：**删掉两个按钮并不会把右边的按钮拉过来。** 结果计数项带
+    一条差点把结论写反的账：**藏掉右边那两个按钮并不会把它们右边的按钮拉过来。** 结果计数项带
     `margin-inline-end: auto`，那是核心自己的留白，它把后面的按钮组顶到最右 —— 所以改动前后
-    `Properties` / `New item` 的位置**一像素不差**，变大的只是中间那段空白。
+    `属性` / `新建` 的位置**一像素不差**，变大的只是中间那段空白。**视图按钮不受这条保护**：它在
+    结果计数**左边**，藏掉它等于把左边那一段整体往左推，结果计数会贴到工具栏左端。
 22. **「添加视图」加出来的永远是表格视图 —— 那是核心写死的，不是配置。** 核心 `addView` 的结尾是
 
     ```js
@@ -616,6 +788,119 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
     —— 所以清空搜索框（它的 `input` 事件就是列表重绘）、等一帧、点新行。切视图、工具栏文字、
     写盘全部由核心完成。**建视图用核心的类，切视图用核心的点击，自己一行都不抄。**
 
+    **但这条现在整条不可达**：发现 21 把视图按钮也藏了，菜单开不出来，接管就没有触发条件。
+    `view-menu.ts` 因此处于「没有运行时影响」的状态。代码留着是有意的 —— 用户要隐藏的是入口，
+    不是这件事的做法；入口放回来的那天，它就接着管用。
+23. **看板搜不到卡片标题 —— 搜索范围被核心写死在 `getOrder()` 上。** 用户报「搜索无效」，真机一量：
+    搜标题里的词（「拖拽」）→ 计数写「显示 0」、看板空；搜字段值（`High`）→ 正常 3 张。
+    根因整个在核心的 `notifyView` 里 —— **搜索不是视图做的事**：
+
+    ```js
+    var p = this.applySearchQuery(h, u.getOrder());   // h = 全量 results，u = viewConfig
+    ...
+    o.data = new l$(i, u, d, p), o.onDataUpdated();   // 过滤完的结果直接推给视图
+    ```
+
+    范围就是 `viewConfig.getOrder()` —— 表格里是可见列，**看板里是卡片字段**。卡片标题
+    （`file.name`）不是「字段」，于是永远不在范围里，搜任何标题都必然 0 条。核心没给范围留参数，
+    `BasesView` 的原型链上也没有任何搜索相关的钩子（只有 `updateProperty` / `exportTable` 这些），
+    所以这跟视图自己怎么写无关 —— 它拿到的数据已经被砍过了。
+
+    **修法（`src/bases/search-scope.ts`）：把 `file.name` 加进范围。** `getOrder` 是原型方法，
+    在**这一个 config 实例**上盖一个自有属性，就只影响这个视图：
+
+    ```ts
+    const order = config.getOrder.bind(config);
+    config.getOrder = () => searchedProperties(order());   // [...order, 'file.name']
+    ```
+
+    为什么比「视图自己再过滤一遍」省得多：
+
+    - **计数是诚实的。** 核心按**它自己过滤的结果**计数，输入框旁边「显示 N」与板上的卡片数永远一致；
+      视图另过滤一遍就会变成「显示 0、板上 3 张」。
+    - **卡片不会多出一个字段。** 看板渲染字段前先过 `isBoardProperty()`，`file.*` 被滤掉，标题变不成
+      胶囊（真机复核：卡片上仍是 `等级 / priority / tags`）。
+    - **不写盘。** `getOrder` 只被读，`.base` 里不会多出 `file.name`。
+    - **别的视图不受影响。** `.base` 里每个视图有自己的 config 实例，表格照旧搜它的列。
+
+    真机上的对照：对「拖拽」，`applySearchQuery(all, order)` = **0**，换成 `['file.name', ...order]`
+    = **1**；改完之后搜「拖拽」板上 1 张、写「显示 1」，`High` 仍是 3、`task` 仍是 7、不存在的词 0、
+    清空 7，卡片字段没变。
+
+    **没做进去的**：卡片描述（正文首段）仍然搜不到 —— 它不是属性，`getValue` 拿不到；要搜正文得自己读
+    文件内容再过滤，而过滤早在核心那边做完了（视图拿到的是过滤后的 `data`）。真要做，得绕过 `data`
+    去读 `controller.results`（全量，见「真机取证」一节），那条路更脏，先不动。
+
+24. **侧栏没有「扩大」这种按钮，而且不是「没画」而是「画在了看不见的地方」—— 侧栏的 header 整个是
+    `display: none`。** 用户报「侧边栏没有扩大按钮」。第一版做法是 `ItemView.addAction('maximize-2', ...)`
+    —— 那是公开 API，加出来的按钮也确实出现在 `.view-actions` 里、`aria-label` 对、回调点得动、
+    **真机自动化全绿**。可人看不见它：真机一量，侧栏 leaf 的 `.view-header` 是
+    `display: none`（`getClientRects()` 为 0），而 `addAction` 写的正是那个 header 里的
+    `.view-actions`。核心自己的书签、阅读模式、更多三个按钮也一起在那儿藏着 —— 也就是说，侧栏里
+    **从来没有过** view header 按钮。
+
+    **教训是量法，不是结论**：那一轮断言查的是「元素在不在 DOM 里」「回调触发没触发」，两样都通过，
+    而查的对象是一个 `display: none` 父元素下、0×0 的按钮。**判可见性要 `getClientRects().length`,
+    再补一次 `document.elementFromPoint(按钮中心)` 看返回的是不是它自己**（前者证明有盒子，后者证明
+    没有被压住）。同类的账之前记过一次（胶囊那次「只桩变量会假通过」）。
+
+    现在的做法：按钮不进 header，走 `view.containerEl.createEl('button', ...)` 直接放在
+    `.workspace-leaf-content` 里，绝对定位到右上角；容器加 `.lattice-with-new-tab` 把 `position` 定成
+    `relative`（真机上它**本来就是** `relative`，但不靠这个巧合），按钮加 `.lattice-new-tab` 上背景/边框/
+    阴影，并借核心的 `clickable-icon` 类保证观感与 header 按钮一致。实测：32×28，`elementFromPoint`
+    返回的是按钮自己，`z-index` 取到 `--layer-cover`。
+
+    另外两条行为上的选择：**只在右栏加**（`leaf.getRoot() === rightSplit`，被拖进主区域的 tab 已经在
+    外面了）；**已经开着就切过去**（`openLinkText(..., 'tab')` 每按一次都会再开一个同名标签页，所以先
+    在主区域找有没有显示同一篇的 leaf，有就 `revealLeaf`）。按钮问的也是 `leaf.view.file`
+    （抽屉**现在**显示的那篇），不是点卡片时记下的那篇。
+25. **「排除文件」藏不了文件树 —— 它是给搜索用的，不是给文件树用的。** 想让 `lattice-board.base`
+    不出现在文件树里，第一反应是把它加进 Obsidian 的「排除文件」。回读 `app.js`：`userIgnoreFilters`
+    只被这几个地方读 —— 搜索、快速切换、链接建议、图谱、反链、标签面板，**以及 Bases 自己那条查询**
+    （`for (...) if (!metadataCache.isUserIgnored(path))`，也就是说排除掉的文件连看板都不会收）。文件树
+    一次都没读它。所以排除只会让文件从搜索结果里消失，树里照旧。
+    
+    第二条想到的路是注入一个 `<style>` 元素把那一行写死 —— **社区插件规范禁止**（`obsidianmd` 的
+    `no-forbidden-elements`，`npm run lint` 直接报 error，见下条）。而 CSS 规则本身也写不死：规则要的是
+    路径，路径是用户的，只有那一行 DOM 自己知道。所以最后落到「观察文件树 + 打一个类」，规则写在
+    `styles.css` 里 —— 和 `property-menu.ts` 同一个形状，也同一个失效方向。
+
+    真机拿到的两件事：**`data-path` 挂在 `.nav-file-title`（内层）上，不在 `.nav-file`（tree-item）上**
+    —— 藏的是外层那一行（内层藏了外层还占一条高度），所以选择器是
+    `.nav-file:has(.nav-file-title[data-path="…"])`；以及**树重建之后标记跟着重建**（`vault.create`
+    造一个新文件 → 树新增一行 → 观察器那一支真的跑到 → 那行仍是 `display: none`，而新文件那行
+    `display: block`，即藏的是一个路径而不是一类文件）。
+26. **新卡片的目录由 `.base` 的 `newItemFolder` 决定，而且缺目录时是「静默什么都不发生」。**
+    `BasesView.createFileForView(baseFileName, frontmatterProcessor)` 自己什么都不建，转手
+    `queryController.newItemMenu.open(e, t)`；目录按这个顺序挑：
+    `newItemFolder` → `newItemTemplate` 所在目录 → `IY(app, query, viewConfig).folder` →
+    `fileManager.getNewFileParent(...)`（也就是 Obsidian「新笔记默认位置」）。**全是核心的键，插件拦不到**，
+    写进 `.base` 就生效，且对每一列都一样：先在目录里 `vault.create`，再 `processFrontMatter` 写值。
+
+    真机（`lattice-cards/` 存在，看的板是 `note.status`）：未分组列的 `+` → `lattice-cards/未命名 2.md`，
+    frontmatter 只有 `tags: [task]` + 空的自定义属性（**没有 `status`**），列计数 2→3；Backlog 列的 `+`
+    → `lattice-cards/未命名 3.md`，带 `status: Backlog`，计数 4→5。**两列都落在文件夹里。**
+
+    坑在**目录不存在**时。`vault.create` 是 `checkPath`（只校验名字合法）→ `adapter.exists` →
+    `adapter.write`，而 `write` 里就是一句 `fsPromises.writeFile`，**不建父目录**；写失败又被
+    `try/finally` 里的 `reconcileInternalFile` 吃掉，最后 `vault.create` 正常 resolve。所以把
+    `lattice-cards` 改名走再点 `+`：**没有新文件、没有 Notice、没有异常** —— 一个按下去什么都不发生的按钮。
+    插件那边 `await createFileForView(...)` 也收不到拒绝，捕不到。要么用户自己保证目录存在（`examples/`
+    里已经写明），要么等「视图怎么知道自己是哪个 `.base`」有答案之后，在按 `+` 那一刻补建目录。
+27. **图标名不认识是静默失效，而它只活在该版 Obsidian 打包的 Lucide 里。**
+    `setIcon` 的真身是三行的 `Jm(e, t)`：拿 `e.firstChild` 比一下类名，不一样就 `removeChild`，再用
+    `getIcon(t)` 取新的，**取到 null 就结束** —— 元素被清空了，且没有任何异常和日志。名字也不是稳定
+    API：同一个图标在现在的 Lucide 叫 `square-kanban`，Obsidian 1.12.4 里叫 `kanban-square`。
+
+    所以换图标只能「对着 `getIconIds()` 查 + 上真机量 DOM」，而真机的断言要**比指纹**：按钮戴
+    `svg-icon lucide-<name>`，形状还能数。`kanban-square` = 1 rect + 3 path，被换掉的 `layout-grid` =
+    4 rect + 0 path —— 后者让「画出来了」这种弱断言变得没用，必须写明预期形状。
+
+    顺带量到核心自己怎么用这套图标：**「新建白板」= `layout-dashboard`、「新建数据库」= `layout-list`**，
+    也就是说 `layout-*` 那一族和核心的词汇是重叠的。另有一条环境事实：**1.12.4 的渲染进程里只有
+    `app` / `Notice` / `moment` 是全局**，`setIcon` / `getIcon` / `getIconIds` 都不是，
+    `require('obsidian')` 在插件沙箱外也取不到模块 —— 真机取证只能走 DOM。
+
 ## 下一步（按 wolai 差异点排序）
 
 1. **列的手动管理** —— 顺序、移除、**新增／预置空列**都已做（见「列的管理」「新增列」）。
@@ -623,8 +908,9 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
    另外普通列在最后一张卡片离开时会消失，手动加的列不会；若这两种要统一（列一旦出现就留下），
    得先决定「数据不再产生某列」时该不该自动把它转成手动列。
 2. **子分组泳道** —— Bases 完全没有这个概念，也是差异化里最硬的一张牌。
-3. **列底虚线的「+ 新增」** —— 列头那个 **+** 已经做了（走 `createFileForView` 并预填分组值，
-   `minAppVersion` 也因此停在 1.10.2）。还差 wolai 那种「每列底部一条虚线 +」的入口，是同一套东西的第二个位置。
+3. **列底虚线的「+ 新增」** —— 列头那个 **+** 已经做了（走 `createFileForView` 并预填分组值，落盘目录来自
+   `.base` 顶层的 `newItemFolder`，见发现 26；`minAppVersion` 也因此停在 1.10.2）。还差 wolai 那种
+   「每列底部一条虚线 +」的入口，是同一套东西的第二个位置。
 4. **列头颜色映射** —— 已做：列头与卡片上同一个值共用同一个颜色（见「卡片的样子与标签的颜色」）。
    还差 wolai 的「跟随单选标签色」那一层：现在颜色由值文本哈希决定，而不是读用户在属性选项里
    配的颜色。等 Bases 的属性选项能带颜色，或者我们自己加一份配色设置时再接。
