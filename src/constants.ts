@@ -7,7 +7,7 @@
  */
 
 /** Matches `id` in manifest.json and the folder name under `.obsidian/plugins/`. */
-export const PLUGIN_ID = 'lattice';
+export const PLUGIN_ID = 'lattice-board';
 
 /**
  * The icon on the ribbon button, and the one the board's Bases view type is

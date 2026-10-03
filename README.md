@@ -1,4 +1,4 @@
-# Lattice
+# Lattice Board
 
 **Status: spike.** A board is a Bases view, so it lives in a `.base` file rather
 than in a view of its own; the Lattice icon opens that file, and the file is kept
@@ -20,8 +20,8 @@ quote or an emoji. `npm run check:manifest` enforces each of those.
 ### Manual
 
 1. Download `main.js`, `manifest.json` and `styles.css` from the latest release.
-2. Put them in `<Vault>/.obsidian/plugins/lattice/`.
-3. Reload Obsidian, then enable **Lattice** in **Settings → Community plugins**.
+2. Put them in `<Vault>/.obsidian/plugins/lattice-board/`.
+3. Reload Obsidian, then enable **Lattice Board** in **Settings → Community plugins**.
 
 ### From source
 

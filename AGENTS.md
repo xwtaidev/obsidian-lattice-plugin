@@ -1,8 +1,8 @@
-# Obsidian community plugin: Lattice
+# Obsidian community plugin: Lattice Board
 
 ## Project overview
 
-- Plugin: **Lattice** (`id: lattice`) — a board over the vault, rendered as a
+- Plugin: **Lattice Board** (`id: lattice-board`) — a board over the vault, rendered as a
   Bases view. The feature set is not settled yet; `README.md` is a placeholder too.
 - Target: Obsidian Community Plugin (TypeScript → bundled JavaScript).
 - Entry point: `src/main.ts` compiled to `main.js` and loaded by Obsidian.
@@ -101,7 +101,7 @@ call `detachLeavesOfType` from `onunload`.
 ## Testing
 
 - Manual install: copy `main.js`, `manifest.json`, `styles.css` to
-  `<Vault>/.obsidian/plugins/lattice/`, reload Obsidian, enable the plugin in
+  `<Vault>/.obsidian/plugins/lattice-board/`, reload Obsidian, enable the plugin in
   **Settings → Community plugins**.
 - `npm run deploy -- <vault-path>` does the copy and then verifies the files
   landed byte for byte.
