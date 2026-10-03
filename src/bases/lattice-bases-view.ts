@@ -16,6 +16,7 @@ import { ConfirmModal } from '../ui/confirm-modal';
 import { TextPromptModal } from '../ui/text-prompt-modal';
 import { isBoardProperty } from './board-properties';
 import { extractDescription } from './description';
+import { searchCardTitles } from './search-scope';
 import { ValuePalette } from './value-colors';
 import {
 	buildColumns,
@@ -262,6 +263,12 @@ export class LatticeBasesView extends BasesView {
 		// see `view-menu.ts`. Every render, because core assigns `config` after
 		// the factory returns.
 		this.plugin.viewMenu.remember(this.containerEl, this.config);
+
+		// Core runs a search before a view is given any data, and the scope it
+		// runs over is the view's own order — a table's columns. A board's order
+		// is the fields on a card, which would leave the card's title out of the
+		// search entirely; see `search-scope.ts`.
+		searchCardTitles(this.config);
 
 		// Whatever these pointed at went with the DOM.
 		this.cardDropTargetEl = null;
