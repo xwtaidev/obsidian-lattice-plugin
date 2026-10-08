@@ -109,19 +109,49 @@
 
 - **列只能从手柄拖起。** 卡片是 `draggable`，列本身不是 —— 手柄是列唯一的拖拽入口，
   于是「起点落在哪」不再有歧义，不必靠猜。
-- **两种拖拽各有自己的落点反馈。** 拖卡片时整个目标列亮起（`.is-card-drop-target`）；
-  拖列时在列与列之间画一条竖线（`.is-drop-before` / `.is-drop-after`），表达的是「插到哪一侧」。
-  反馈刻意长得不一样，因为这是两件事。
+- **两种拖拽各有自己的落点反馈。** 拖卡片时目标列亮起（`.is-card-drop-target`），并在**它的列表里**
+  开一个落点槽（`.lattice-card-slot`：虚线框 + 被拖卡片自己的标题，高度按那张卡量）；拖列时在列与
+  列之间画一条竖线（`.is-drop-before` / `.is-drop-after`），表达的是「插到哪一侧」。
+  反馈刻意长得不一样，因为这是两件事。落点槽见下面「卡片落在哪」。
 - **整个看板只有一组 drag 监听**（挂在 `.lattice-board-columns` 上），没有按列各自接一套。
   目标列从事件里查，落点反馈永远只有一个元素携带 —— 这也是 `dragleave` 的噪音不会让整块板
   抖闪的原因。
 - **`text/plain` 一律不设。** 卡片拖进笔记里不该粘出一个路径，Obsidian 自己的拖拽体系也不该
   把这些当成文件拖拽接过去。
 - 只接**自己写的类型**。外部拖拽（Finder 的文件、别的面板）没有 `preventDefault`，看板就不接。
+- **放不下的列不给任何反馈。** 两种情形：拖回原来那一列（`dropCard` 自己就会早退，见 `payload.column ===
+  target`），以及整块板子的 `latticeGroupBy` 是**派生属性**（`file.name` / `formula.x`，没有 frontmatter
+  可写）。这两种情况下 `dragover` **不调 `preventDefault`**、不亮列、不开槽 —— 光标自己会说「放不下」，
+  插件一个字都不用写。**这是 2026-10-08 改的**：之前任何一列都会亮起来，包括点了什么都不会发生的那种。
 
 拖列的落点由 `reorderByDrop(keys, from, hovered, after)` 算。它看着像没必要的算术，其实不是：
 `moveColumn` 是「先删后插」，所以凡是从删除前的数组取来的下标，向右拖时统统差一位。
 A 拖到 C 的右半边必须得到 `[B, C, A, D]`，算错了要等某次列落错一格才会被发现。
+
+### 卡片落在哪
+
+拖卡片时的落点槽有**两层**意义，只有一层是真的：
+
+- **哪一列** —— 真的。放下就写回该列的值。
+- **列里的第几个位置** —— **只是画出来的**。槽的上下位置由 `cardDropIndex(midpoints, clientY)` 决定
+  （`midpoints` 是列里每张卡的垂直中点，「指针还没过中点的那张卡」之前就是落点，全过了就落到最后），
+  但**列内顺序不归看板管**：卡片在列里的先后来自 `.base` 的排序（这一版没有任何 sort 时就是数据自己的
+  顺序），而 `moveCard` 只写那一个 frontmatter 值。**实测过**：把卡片拖到 Doing 的第 2 个位置松手，
+  它落在 Doing 的第 3 张（见「已验证」里的真机量测）。
+
+⇒ 所以别把它当「插入到这儿」看。要让落点真正决定顺序，得先有**列内手动排序**（见「下一步」第 5 条）：
+存一份每列自己的卡片顺序，并且和「哪些卡不在那份名单里」和解。在那之前，槽的位置是**提示**，列才是承诺。
+
+槽本身有三处细节：
+- **元素是搬的、不是重建的。** `dragover` 每个像素都发一次，重建会让它每次都重新排版；而且它自己占
+  位置（这正是「给卡片腾出地方」的意思），所以量 `midpoints` 时**要跳过槽自己**，否则「哪里该放槽」
+  这个问题的答案里就混进了槽自己的高度。
+- **两张卡之间的中点线是「粘」的**，不是抖的：槽插进列表后把下面的卡推下去，指针却还在原来的位置，
+  于是判定结果不变（实测：y=300 插到第 1 个位，再移到 y=700，槽落到第 2 个位而不是第 3 个 —— 因为
+  第 3 张卡的中点被槽推到了指针下方）。
+- **从别的看板拖过来的卡片**这条路也走得通：本视图没见过它的 `dragstart`，所以没有标题也没有尺寸
+  （槽只占 `min-height: var(--size-4-10)`，没有标题行），但它照样亮列、照样接。两个看板并排开着的时候
+  这是常态。
 
 ## 列顺序为什么不再随卡片变动
 
@@ -443,6 +473,10 @@ npm run deploy -- <vault-path>
 28. **看新卡片落在哪**：在**任意一列**的列头点 `+`。新笔记应该在 `lattice-cards/` 里；有值的列还会把值
     写进 frontmatter（未分组列不写）。**先确认 `lattice-cards` 这个文件夹真的存在** —— 指向一个不存在的
     文件夹时，`+` 是「什么都不发生」，没有提示、没有报错（见发现 26）。
+29. **看拖卡片的落点槽**：按住一张卡片往别的列拖（别松手）—— 目标列亮起，列里出现一个虚线框，写的是
+    那张卡片的标题，高度也是那张卡的高度，下面的卡片跟着让出位置；上下移动，虚线框跟着挪。拖回它
+    原来那一列，列不亮、槽也不开（松手什么都不会发生）。**松手之后卡片在列里的位置未必是槽那个位置**，
+    原因见「卡片落在哪」。
 
 ```bash
 npm test        # 纯函数断言（node:test + esbuild，无第三方框架）：描述提取 + 列的分组规则 + 属性白名单 + 视图命名 + 搜索范围 + 放大按钮的文案
@@ -455,12 +489,13 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
 - `npm run build` —— 类型检查 + 打包通过，说明所有 API 签名都对得上
 - `npm run lint` —— 0 error
 - `npm run check:manifest` —— 全绿
-- `npm test` —— **105 条**断言全过（`description.test.ts` 30 条 + `grouping.test.ts` 48 条 +
+- `npm test` —— **110 条**断言全过（`description.test.ts` 30 条 + `grouping.test.ts` 53 条 +
   `board-properties.test.ts` 3 条 + `property-menu.test.ts` 4 条 + `view-menu.test.ts` 5 条 +
   `search-scope.test.ts` 4 条 + `drawer-action.test.ts` 3 条 + `board-seed.test.ts` 8 条）。运行器是
   `scripts/test.mjs`：把 `src/**/*.test.ts` 用 esbuild 打成 ESM 丢进临时目录，再 `node --test` 跑；
   不引第三方框架。`grouping.test.ts` 收的是原先躺在 `/tmp` 的那批一次性断言（分组、移除、显式顺序、
-  `moveColumn` 的边界、`reorderByDrop` 的全部 32 种落点）加上新增列的新用例 —— **`/tmp` 那份已经搬空**。
+  `moveColumn` 的边界、`reorderByDrop` 的全部 32 种落点、`cardDropIndex` 的边界）加上新增列的新用例
+  —— **`/tmp` 那份已经搬空**。
 - 列顺序不随卡片变动的结论，是先写脚本跑出来才改的代码（`/tmp/lattice-drag-proof.ts`）：
   确认 `Backlog→Done` 会让列顺序从 `[Backlog, Doing]` 变成 `[Done, Doing, Backlog]`。
 - 卡片密度与标签颜色用离屏渲染量过（`/tmp/lattice-preview/`）：真实 `styles.css` + 复刻的 DOM +
@@ -541,6 +576,24 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
 主进程直接 `FATAL: GPU process isn't usable`）；`curl` 要 `--noproxy '*'`（agent shell 里挂着
 `HTTP_PROXY`，对 127.0.0.1 也生效）；**插件热重载不够** —— disable/enable 之后核心手里拿的仍是旧插件
 建的那个视图实例，`main.js` 换了也不生效，**要重启实例**（`pkill -f "user-data-dir=<临时目录>"`）。
+**还有一条 2026-10-08 撞上的：Obsidian 1.14.4 下，干净的 `--user-data-dir` 里社区插件一律不加载** ——
+`app.plugins.manifests` 认得出 `lattice-board`、`community-plugins.json` 也写着它，但
+`app.plugins.plugins` 是空的、ribbon 上只有核心按钮。卡在 `PluginManager.isEnabled()` 上，它的实现是
+
+```js
+function () { return 'true' === localStorage.getItem('enable-plugin-' + this.app.appId) }
+```
+
+也就是**每个库一份、存在 localStorage 里的那个「启用社区插件」总开关**，而全新的 user-data-dir 里没有它
+（`--user-data-dir` 就是 localStorage 的落脚处）。修法是进去写一句再重载：
+
+```js
+localStorage.setItem('enable-plugin-' + app.appId, 'true')   // appId 是每个库一个的随机串
+```
+
+写完 `curl -X PUT http://127.0.0.1:<port>/json/reload`，回来 `app.plugins.plugins` 里就有东西了。**
+症状之所以难认，是因为它长得像「插件坏了」**：没有报错、没有 Notice，`enablePlugin()` 也返回 true，
+只是 `loadPlugin` 第一行 `if (!this.isEnabled()) return` 就退了。
 
 从此以后，「核心 DOM 长什么样」不再只能从 `app.js` 里推。已经拿到的（全部是读活物，不是读 bundle）：
 
@@ -594,6 +647,31 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
   `boards/work.base` 都被建出来，内容同样是空白看板。
   两次都是「先删掉文件、看它自己回来」，所以①③不是「本来就在那儿」的误读。
 
+- **拖卡片的落点槽 —— 真机量过（2026-10-08 新增）。** 走的是同一个工装，只把「怎么造一次拖拽」换掉了：
+  **不用去合成原生鼠标事件，直接用 `DataTransfer` + 合成的 `DragEvent` 打真正的处理函数**——
+  `new DataTransfer()`、`setData`、然后往元素上 `dispatchEvent(new DragEvent('dragover', {dataTransfer, clientX,
+  clientY, bubbles, cancelable}))`。`types` / `getData` / `defaultPrevented` 都照常工作，所以整条
+  `dragstart → dragover → drop → dragend` 能一条条打出来（`dragover` 的目标用 `document.elementFromPoint(x, y)`
+  取，跟真的一模一样）。量到的（6 列、Doing 那列 6 张卡）：
+
+  | 打的事件 | 结果 |
+  | --- | --- |
+  | `dragstart`（Backlog 第 1 张，高 175） | `types = ['application/x-lattice-card']`、源卡片戴 `is-dragging`、槽 0 个 |
+  | `dragover` Doing y=300 | `defaultPrevented = true`、Doing 亮、槽在**第 1 个位**、标题 = 源卡片标题、高 **175** = 卡的高度；下面 5 张卡每张**下移 183** = 175 + 8（就是槽的占位） |
+  | 再 `dragover` Doing y=700 | 槽落到**第 2 个位**（不是第 3），且**还是同一个 DOM 节点**（`slots[0] === 上一个`）：槽把第 3 张卡的中点推到了指针下方 |
+  | `dragover` Backlog（它出来的那一列）y=300 | `defaultPrevented = false`、没有列亮、槽 0 个 |
+  | `dragover` 回到 Doing | 槽回来，又是在第 1 个位 |
+  | `dragover` y=4000（列底以下） | 槽在**第 7 个位** = 该列真实卡片数，即落到最末 |
+  | `dragend`（没有 drop） | `is-dragging` 摘掉、槽 0 个、亮列 0 个 |
+  | `dragover` 一个**没见过 `dragstart`** 的卡片载荷（模拟从另一块板子拖过来） | 照样亮列、照样开槽，槽**没有标题**、高 **40** = CSS 的 `min-height`（`--size-4-10`）、没有内联高度 |
+  | 真 `drop` 到 Doing | 槽清掉、亮列清掉、文件里出现 `status: Doing`、Backlog 5→4 张、Doing 6→7 张、**只有 6 列**（没有多出一列） |
+  | 列拖拽（手柄起拖，落到 Done 左半边）回归 | Done 戴 `is-drop-before`、**槽 0 个**、亮列 0 个、`dragend` 之后竖线 0 条 |
+
+  两处**对照**：① 松开后卡片落在 Doing 的**第 3 张**，而槽画的是第 1、2 个位 —— 这就是「列内位置只是画出来的」
+  的实测证据（见「卡片落在哪」）；② 把 `.base` 的 `latticeGroupBy` 临时改成 `file.name`（派生属性）再拖，
+  **三列全都不亮、槽 0 个、`defaultPrevented` 全是 false**（改完立刻还原）。另外把某一列的
+  `.lattice-column-cards` 临时清空（白箱模拟「手动加出来的空列」）：`defaultPrevented = true`、槽在**第 0 个位**、高
+  175，之后把卡片放回去，收尾时全板槽 0、`is-dragging` 0、亮列 0。
 
 **未验证，需要真机确认**：
 
@@ -602,8 +680,12 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
 - 拖拽手感。我用的是 HTML5 原生 drag & drop，Obsidian 自己有拖拽体系，两者在 `obsidian.md` 里的表现要实测。
 - **拖列时 `setDragImage(columnEl, ...)` 是否被正常快照。** 用它是为了让拖拽影像跟着整列而不是
   那个 16px 的图标走。若 Electron 下影像不对，退路是让整个列头当拖拽起点。
-- **`dragover` 期间 `dataTransfer.types` 是否稳定带着自定义类型。** 两种拖拽的路由全靠它 ——
-  拖拽进行中数据不可读，只有类型可读。若不稳，退路是记在视图实例上。
+- **`dragover` 期间 `dataTransfer.types` 是否稳定带着自定义类型 —— 已经被真人拖动证实。** 两种拖拽的
+  路由全靠它（拖拽进行中数据不可读，只有类型可读）。**真人拿鼠标拖一张卡片时目标列会亮起**，而亮列
+  这一步就在 `types.includes(LATTICE_CARD_DRAG_TYPE)` 之后 —— 所以这一支在真实拖动下是通的
+  （合成事件的量测只是把「亮得对不对」补齐，不能单独作数）。**顺带一提：拖拽进行中 `dropEffect` 读不出来**
+  —— 合成事件里给它赋 `'none'` / `'move'`，读回来一律是 `'none'`。要看「这一列接不接」只能看
+  `dragover` 有没有被 `preventDefault`（接 = `true`）。
 - **`config.set` 是否真的持久化 —— 已证实（2026-10-02）。** 测试 vault 里的 `lattice-board.base`
   已经出现了 `latticeColumnOrder: [Backlog, Doing, Done, Blocked]`，而这个 key 从没被手写进去过。
   顺带看到 Obsidian 会把 `.base` 重新序列化（自己加回去 `type: table/cards/list` 那几个视图，
@@ -951,6 +1033,17 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
     见「看板文件、卡片文件夹、入口」）。**这一条只在发现 21 生效之后才成立** —— 视图入口放回来的那天，
     它跟着作废。
 
+29. **落点槽的位置是「画出来」的，卡片最终落哪不归看板管（2026-10-08）。** 拖卡片时列里会开一个虚线槽
+    （`.lattice-card-slot`，高度按被拖的那张卡量、写它自己的标题），位置由 `cardDropIndex(midpoints,
+    clientY)` 算 —— 但**列内顺序来自 `.base` 的 sort，而 `moveCard` 只写那一个 frontmatter 值**。
+    真机对照过：槽画在 Doing 的第 2 个位，松手后卡片落在第 3 张。所以槽只能读成「会进这一列」，
+    不能读成「会插在这儿」；要让它名副其实，得先做列内手动排序（见「下一步」第 5 条）。
+
+    同一个槽还有两条必须记住的：**量 `midpoints` 时要跳过槽自己**（它自己占位置，否则「槽该放哪」的
+    答案里混进了槽自己的高度）；**拖回原来那一列、或板子的 `latticeGroupBy` 是派生属性时，整条反馈都不发**
+    （不 `preventDefault`、不亮列、不开槽），光标自己会说放不下 —— 这一条是 2026-10-08 改的，
+    改之前任何一列都会亮起来，包括点了什么都不会发生的那种。
+
 ## 下一步（按 wolai 差异点排序）
 
 1. **列的手动管理** —— 顺序、移除、**新增／预置空列**都已做（见「列的管理」「新增列」）。
@@ -964,5 +1057,9 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
 4. **列头颜色映射** —— 已做：列头与卡片上同一个值共用同一个颜色（见「卡片的样子与标签的颜色」）。
    还差 wolai 的「跟随单选标签色」那一层：现在颜色由值文本哈希决定，而不是读用户在属性选项里
    配的颜色。等 Bases 的属性选项能带颜色，或者我们自己加一份配色设置时再接。
-5. **拖拽补完** —— 列之间已经能拖（手柄起拖 + 竖线落点）。还差**列内排序**：卡片在列里的先后，
-   以及排序结果的持久化（frontmatter 属性）。
+5. **拖拽补完** —— 列之间已经能拖（手柄起拖 + 竖线落点），卡片拖到哪一列也有落点槽了（虚线框 + 标题，
+   跟着指针走，见「卡片落在哪」）。还差**列内排序**：卡片在列里的先后，以及排序结果的持久化。**这是
+   落点槽目前唯一还没兑现的承诺** —— 槽画在第 2 个位，卡片可能落在第 3 张。要兑现得做三件事：
+   ① 一份每列自己的卡片顺序（存哪儿待定：`.base` 里按列名存一串路径，或者每张笔记上一个排序键）；
+   ② 与「不在那份名单里的卡片」和解（新卡片、被别的工具改了状态的卡片）—— 名单外的按数据原顺序接在后面
+   是最省事的答案；③ 加了顺序之后再想「排序属性改了怎么办」，因为 Bases 自己的 sort 和它必然打架。

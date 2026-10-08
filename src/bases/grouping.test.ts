@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import type { BasesEntry, BasesPropertyId } from 'obsidian';
 import {
 	buildColumns,
+	cardDropIndex,
 	columnKey,
 	moveColumn,
 	reorderByDrop,
@@ -300,6 +301,42 @@ describe('reorderByDrop', () => {
 		}
 
 		assert.equal(swept, keys.length * keys.length * 2);
+	});
+});
+
+describe('cardDropIndex', () => {
+	// Three cards 100px tall, one under the next: centres at 50, 150, 250.
+	const midpoints = [50, 150, 250];
+
+	it('puts a card above the first one the pointer has not reached', () => {
+		assert.equal(cardDropIndex(midpoints, 0), 0);
+		assert.equal(cardDropIndex(midpoints, 49), 0);
+		assert.equal(cardDropIndex(midpoints, 51), 1);
+		assert.equal(cardDropIndex(midpoints, 149), 1);
+		assert.equal(cardDropIndex(midpoints, 151), 2);
+	});
+
+	it('puts a card at the end once the pointer is past every card', () => {
+		assert.equal(cardDropIndex(midpoints, 251), 3);
+		assert.equal(cardDropIndex(midpoints, 5000), 3);
+	});
+
+	it('opens the one slot an empty column has', () => {
+		assert.equal(cardDropIndex([], 0), 0);
+		assert.equal(cardDropIndex([], 400), 0);
+	});
+
+	it('treats a pointer exactly on a centre as past it', () => {
+		// The boundary is not a tie to be broken carefully, it is where the
+		// card under the pointer starts being the one above it.
+		assert.equal(cardDropIndex([50], 50), 1);
+	});
+
+	it('never answers with a slot outside the list', () => {
+		for (const pointerY of [-100, 0, 50, 150, 250, 900]) {
+			const index = cardDropIndex(midpoints, pointerY);
+			assert.ok(index >= 0 && index <= midpoints.length);
+		}
 	});
 });
 

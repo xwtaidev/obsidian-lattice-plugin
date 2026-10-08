@@ -256,6 +256,31 @@ export function reorderByDrop(
 }
 
 /**
+ * Which slot of a column a dragged card is dropped into.
+ *
+ * `midpoints` are the vertical centres of the cards a column is showing, in
+ * draw order. The card goes in front of the first one the pointer has not yet
+ * reached, and at the end when it has passed them all — `columnAt`'s rule,
+ * turned through ninety degrees, so the two drags answer to the same hand.
+ *
+ * What this decides is the slot the drop is drawn in, not where the note ends
+ * up: a column's order comes from the base's sort, and nothing on the board
+ * writes it. The slot is how a drag says *which card* is going where, which
+ * the lit-up column alone cannot.
+ */
+export function cardDropIndex(midpoints: number[], pointerY: number): number {
+	let index = 0;
+	for (const midpoint of midpoints) {
+		if (pointerY < midpoint) {
+			return index;
+		}
+		index += 1;
+	}
+
+	return midpoints.length;
+}
+
+/**
  * The frontmatter key a grouping property writes back to, or `null` when the
  * property cannot be written at all.
  *

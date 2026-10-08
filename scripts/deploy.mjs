@@ -76,6 +76,7 @@ const markers = [
 	'.lattice-column.is-card-drop-target',
 	'.lattice-column-grip',
 	'.lattice-column.is-drop-before',
+	'.lattice-card-slot',
 	'.lattice-card-row-value',
 	'.lattice-card-description',
 	'.lattice-add-column',

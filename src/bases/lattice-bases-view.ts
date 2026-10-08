@@ -21,6 +21,7 @@ import { searchCardTitles } from './search-scope';
 import { ValuePalette } from './value-colors';
 import {
 	buildColumns,
+	cardDropIndex,
 	columnKey,
 	moveColumn,
 	reorderByDrop,
@@ -80,6 +81,16 @@ function noValueLabel(): string {
 }
 
 const NAMING: ColumnNaming = { noValue: noValueLabel(), allNotes: 'All notes' };
+
+/**
+ * The tallest the slot under a dragged card is drawn.
+ *
+ * A card is as tall as its description makes it. A dashed box the height of a
+ * five-line card stops reading as a place one is about to go and starts reading
+ * as a card that failed to load, so a long card is stood in for by a shorter
+ * one — the slot has already said which card it is by then.
+ */
+const CARD_SLOT_MAX_HEIGHT = 200;
 
 /** What a card drag carries: which note, and which column it started in. */
 interface CardDragPayload {
@@ -213,6 +224,34 @@ export class LatticeBasesView extends BasesView {
 	private columnIndicatorClass: string | null = null;
 
 	/**
+	 * The card a drag started from, for as long as it lasts.
+	 *
+	 * A drag's data cannot be read while it is still going — only its types can
+	 * — and everything the feedback for a card drag needs is that data: what the
+	 * card is called, how tall it is, and which column it came out of. So it is
+	 * put down here on `dragstart`, where it is still readable, and the
+	 * `dragover` that draws the slot reads it from here. Cleared on `dragend`.
+	 *
+	 * `null` while a card is being dragged in from somewhere else — a second
+	 * board open beside this one, whose `dragstart` this view never saw. Such a
+	 * card can still be dropped here; there is just less to say about it.
+	 */
+	private draggedCard: { title: string; height: number; from: string } | null = null;
+
+	/**
+	 * The slot showing where a dragged card would land, and where it is.
+	 *
+	 * The element is kept and moved rather than rebuilt: `dragover` fires for
+	 * every pixel of the drag, and a redrawn element would restart its own
+	 * layout each time. The neighbour it was last put in front of is kept with
+	 * it, so "the pointer has not moved it" is a comparison of two references
+	 * rather than an index to keep in step with the DOM.
+	 */
+	private cardSlotEl: HTMLElement | null = null;
+	private cardSlotParent: HTMLElement | null = null;
+	private cardSlotNext: Element | null = null;
+
+	/**
 	 * The right-sidebar leaf the last card opened in.
 	 *
 	 * Held on to rather than asking the workspace for the active sidebar leaf,
@@ -285,6 +324,9 @@ export class LatticeBasesView extends BasesView {
 		this.cardDropTargetEl = null;
 		this.columnIndicatorEl = null;
 		this.columnIndicatorClass = null;
+		this.cardSlotEl = null;
+		this.cardSlotParent = null;
+		this.cardSlotNext = null;
 
 		// Colours are handed out in draw order, so they are drawn again with the
 		// board they belong to.
@@ -714,6 +756,16 @@ export class LatticeBasesView extends BasesView {
 				JSON.stringify({ path: entry.file.path, column: fromColumn }),
 			);
 			transfer.effectAllowed = 'move';
+			// Measured here because this is the last moment the card can be
+			// asked about itself — and because a slot left over from a drag
+			// that ended without a `dragend` would otherwise stand in for this
+			// card wearing the last one's title.
+			this.removeCardSlot();
+			this.draggedCard = {
+				title: entry.file.basename,
+				height: card.getBoundingClientRect().height,
+				from: fromColumn,
+			};
 			card.classList.add('is-dragging');
 		});
 		card.addEventListener('dragend', () => {
@@ -1093,6 +1145,12 @@ export class LatticeBasesView extends BasesView {
 		groupBy: BasesPropertyId | null,
 		columns: LatticeColumn[],
 	): void {
+		// Whether this board can take a card at all. A grouping property that is
+		// derived (`file.name`, `formula.x`) has nothing to write back to, so no
+		// column on this board accepts a card and none of them should say they
+		// do.
+		const cardKey = groupBy === null ? null : writablePropertyKey(groupBy);
+
 		board.addEventListener('dragover', (event) => {
 			const transfer = event.dataTransfer;
 			if (transfer === null) {
@@ -1111,10 +1169,7 @@ export class LatticeBasesView extends BasesView {
 			}
 
 			if (types.includes(LATTICE_CARD_DRAG_TYPE)) {
-				// The whole column accepts a card, so the column is what lights up.
-				event.preventDefault();
-				transfer.dropEffect = 'move';
-				this.setCardDropTarget(this.columnAt(board, event)?.el ?? null);
+				this.showCardDrop(transfer, event, board, cardKey);
 			}
 			// Anything else — a file from Finder, a drag from another pane — is
 			// left alone: no preventDefault, so the board does not accept it.
@@ -1196,6 +1251,109 @@ export class LatticeBasesView extends BasesView {
 		el?.classList.add('is-card-drop-target');
 	}
 
+	/**
+	 * What a card being dragged over the board looks like.
+	 *
+	 * Two things, because they answer two questions: the column under the
+	 * pointer lights up — *which* column — and a slot opens in its list, in
+	 * front of the cards the pointer has not reached — *where* in it. The card's
+	 * own title goes in the slot, so what is being moved stays legible after the
+	 * browser's drag image has been dragged off the edge of the window.
+	 *
+	 * A column that would do nothing with the card gets neither. Dropping a card
+	 * back where it already is, or anywhere at all on a board whose columns come
+	 * from a property that cannot be written, is not a move — and lighting a
+	 * column up is this board promising that it is. The drag is handed back to
+	 * the browser there instead, which is where a cursor saying "no drop" comes
+	 * from without a word of it in the plugin.
+	 */
+	private showCardDrop(
+		transfer: DataTransfer,
+		event: DragEvent,
+		board: HTMLElement,
+		cardKey: string | null,
+	): void {
+		const hit = this.columnAt(board, event);
+		// An unknown origin — a card dragged in from another board — is never
+		// the column under the pointer, which is what the `?.` says.
+		const from = this.draggedCard?.from ?? null;
+		if (hit === null || cardKey === null || from === hit.el.dataset.value) {
+			transfer.dropEffect = 'none';
+			this.setCardDropTarget(null);
+			this.removeCardSlot();
+			return;
+		}
+
+		event.preventDefault();
+		transfer.dropEffect = 'move';
+		this.setCardDropTarget(hit.el);
+		this.setCardSlot(hit.el, event.clientY);
+	}
+
+	/**
+	 * Open the slot in a column's list, in front of the first card the pointer
+	 * has not passed the middle of.
+	 *
+	 * The slot takes up room, which is the point of it — the cards under it move
+	 * down by the amount they are about to move down by. It is also why the slot
+	 * is skipped when the midpoints are measured: it is not one of the cards the
+	 * pointer is choosing between, and counting it would make the slot's own
+	 * height part of the answer to where the slot goes.
+	 */
+	private setCardSlot(columnEl: HTMLElement, clientY: number): void {
+		const list = columnEl.querySelector<HTMLElement>('.lattice-column-cards');
+		if (list === null) {
+			this.removeCardSlot();
+			return;
+		}
+
+		const cards = Array.from(list.children).filter((child) => child !== this.cardSlotEl);
+		const index = cardDropIndex(
+			cards.map((card) => {
+				const rect = card.getBoundingClientRect();
+				return rect.top + rect.height / 2;
+			}),
+			clientY,
+		);
+		const next = cards[index] ?? null;
+
+		if (this.cardSlotEl !== null && this.cardSlotParent === list && this.cardSlotNext === next) {
+			return;
+		}
+
+		this.cardSlotParent = list;
+		this.cardSlotNext = next;
+		this.cardSlotEl ??= this.createCardSlot();
+		list.insertBefore(this.cardSlotEl, next);
+	}
+
+	/**
+	 * The slot itself: a dashed outline of the card being dragged, wearing its
+	 * title, as tall as the card it stands in for.
+	 *
+	 * A card dragged in from another board arrives here with nothing known about
+	 * it, so it gets an empty slot of the same shape — the drag still says which
+	 * column it is over, which is all this view can honestly say.
+	 */
+	private createCardSlot(): HTMLElement {
+		const slot = createDiv({ cls: 'lattice-card-slot' });
+		const card = this.draggedCard;
+		if (card === null) {
+			return slot;
+		}
+
+		slot.style.height = `${Math.min(card.height, CARD_SLOT_MAX_HEIGHT)}px`;
+		slot.createDiv({ cls: 'lattice-card-slot-title', text: card.title });
+		return slot;
+	}
+
+	private removeCardSlot(): void {
+		this.cardSlotEl?.remove();
+		this.cardSlotEl = null;
+		this.cardSlotParent = null;
+		this.cardSlotNext = null;
+	}
+
 	private setColumnIndicator(el: HTMLElement | null, after: boolean): void {
 		const cls = after ? 'is-drop-after' : 'is-drop-before';
 		if (this.columnIndicatorEl === el && this.columnIndicatorClass === cls) {
@@ -1211,6 +1369,7 @@ export class LatticeBasesView extends BasesView {
 	private clearDropFeedback(): void {
 		this.cardDropTargetEl?.classList.remove('is-card-drop-target');
 		this.cardDropTargetEl = null;
+		this.removeCardSlot();
 		this.columnIndicatorEl?.classList.remove('is-drop-before', 'is-drop-after');
 		this.columnIndicatorEl = null;
 		this.columnIndicatorClass = null;
@@ -1224,6 +1383,7 @@ export class LatticeBasesView extends BasesView {
 	 */
 	private finishDrag(dragged: HTMLElement): void {
 		dragged.classList.remove('is-dragging');
+		this.draggedCard = null;
 		this.clearDropFeedback();
 	}
 

@@ -234,6 +234,36 @@
 	opacity: 0.5;
 }
 
+/* The place a dragged card is about to go, drawn in the column it is over.
+   Dashed and tinted, because it is not a card — it is where one goes. The view
+   writes its height from the card being dragged, so `box-sizing` has to be
+   border-box for that number to be the same height the card is; the padding and
+   the border are the slot's own and must not be added to it. */
+.lattice-card-slot {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: var(--size-4-1);
+	min-height: var(--size-4-10);
+	padding: var(--size-4-3);
+	border: 1px dashed var(--interactive-accent);
+	border-radius: var(--radius-m);
+	background-color: color-mix(in srgb, var(--interactive-accent) 8%, transparent);
+	overflow: hidden;
+}
+
+/* The dragged card's own title, so the slot names what is coming and not only
+   where. Muted: the card is still where the user left it, and this is where it
+   would be instead. */
+.lattice-card-slot-title {
+	min-width: 0;
+	font-weight: var(--font-medium);
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 /* Title and description are one block, so the description reads as the second
    half of the title rather than as the first of the properties. */
 .lattice-card-head {
