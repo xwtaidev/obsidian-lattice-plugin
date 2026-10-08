@@ -15,6 +15,7 @@
     - `src/settings.ts` — the settings interface, `DEFAULT_SETTINGS`, and the settings tab.
     - `src/constants.ts` — stable ids, the icon name, the default board file.
     - `src/board-file.ts` — keeps the board's `.base` file out of the file explorer.
+    - `src/board-seed.ts` — writes the blank board file a vault with none gets.
     - `src/bases/` — the Bases view and the pieces it is built from (see `README.md`).
     - `src/ui/` — the two dialogs core has no public API for.
 

@@ -22,6 +22,9 @@ quote or an emoji. `npm run check:manifest` enforces each of those.
 1. Download `main.js`, `manifest.json` and `styles.css` from the latest release.
 2. Put them in `<Vault>/.obsidian/plugins/lattice-board/`.
 3. Reload Obsidian, then enable **Lattice Board** in **Settings → Community plugins**.
+4. Select the Lattice icon in the ribbon. The board is a Bases view, so it lives
+   in a `.base` file — the plugin writes a blank one the first time it loads into
+   a vault that has none, and opens that.
 
 ### From source
 
@@ -65,6 +68,7 @@ src/
   settings.ts    the settings interface, its defaults, and the settings tab
   constants.ts   stable ids (plugin id, icon, the default board file)
   board-file.ts  keeps the board's `.base` file out of the file explorer
+  board-seed.ts  writes the blank board a vault with none gets
   bases/
     register.ts            registers the board as a Bases view
     lattice-bases-view.ts  the board itself: columns, cards, both drags, the menus

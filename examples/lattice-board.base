@@ -4,6 +4,10 @@
 # entry below already asks for `lattice-board`; if the plugin is enabled and
 # installed, the board renders instead of a table.
 #
+# A vault with no board of its own gets a blank one written at load (see
+# `src/board-seed.ts`). This file is for what that one does not do: keep the
+# board to a tagged set of notes, and name the columns up front.
+#
 # It also expects a folder called `lattice-cards` — see `newItemFolder` below.
 # Make the folder before pressing a column's `+`, because a `+` whose folder is
 # not there does nothing at all, without an error to say why.

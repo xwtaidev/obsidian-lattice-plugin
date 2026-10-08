@@ -286,8 +286,22 @@ Bases 给不出正文。它能给的属性只有三种来源 —— `note.*`（f
 | 面 | 落在哪 | 谁决定 |
 | --- | --- | --- |
 | 看板本身 | 一个 `.base` 文件（默认 `lattice-board.base`） | 插件设置 **Board file** |
-| 从哪进 | 左侧 ribbon 的 Lattice 图标（以及命令 `lattice:open-board`） | 插件 `main.ts` 的 `openBoard()` |
+| 从哪进 | 左侧 ribbon 的 Lattice 图标（以及命令 `lattice-board:open-board`） | 插件 `main.ts` 的 `openBoard()` |
 | 卡片放哪 | 一个普通文件夹（`lattice-cards`） | `.base` 顶层的 `newItemFolder` |
+
+**一个刚装好插件的库，连这个文件都还没有 —— 所以第一次加载时插件自己写一份（2026-10-08 加）。**
+这是「入口只有一个」留下的洞：门只有图标那一扇，门后的文件却要用户自己造 —— `examples/lattice-board.base`
+只活在仓库里，而 release 只带 `main.js` / `manifest.json` / `styles.css`。`src/board-seed.ts` 补上这一步：
+设置指的那个路径没有文件，就写一份空白看板；**已经有了就一个字节都不动**；路径里带目录
+（`boards/work.base`）就把缺的目录逐级建出来；写不出来（只读库）时返回 false，点图标那句
+「no file at …」照旧兜底。写成功了会说一声（Notice）—— 文件是自己冒出来的，而**看板被改名搬走之后
+这个也会再触发一次**（设置里存的是旧路径），一句话比让用户猜好。
+
+**这份空白看板必须带 `latticeGroupBy`，否则板子只能看不能配。** 不带的板子只有一列 `All notes`，
+而两个能造列的按钮都会被收起来（`renderAddColumn` 在 `groupBy === null` 时直接 return，列头那个 `+`
+同理），`Group by` 的入口又只在被藏掉的视图菜单里（见发现 28）。所以种子写的是
+`latticeGroupBy: note.status`、不筛选 —— 开箱就有可写的列、能拖卡片写回 frontmatter，字段名随用户
+在文件里改。
 
 **入口只有一个，所以那个文件不该待在文件树里。** 文件树是「找文件」的地方，而 `.base` 不是要打开的文档，
 是应用自己的一块屏 —— 它出现在树里只会让人以为那是该点的东西。所以插件把它的那一行藏掉
@@ -345,10 +359,13 @@ npm run deploy -- <vault-path>
 
 然后在 Obsidian 里：
 
-1. 在 vault 里建一个文件夹叫 `lattice-cards`（新卡片落在那儿，见发现 26），然后把
-   `examples/lattice-board.base` 拷进 vault 任意目录，打开它。视图类型已经写成 `lattice-board`。
+1. 库根目录应该有 `lattice-board.base` —— 插件加载时自己写的（`src/board-seed.ts`），打开它就是看板。
+   要试**带筛选**的那份，先建一个文件夹 `lattice-cards`（新卡片落在那儿，见发现 26），把
+   `examples/lattice-board.base` 拷进 vault 任意目录，再在设置里把 **Board file** 指过去。两种文件里的
+   视图类型都已经写成 `lattice-board`。
 2. 若显示的不是看板，用视图右上角切换到 **Lattice board**。
-3. 打开视图配置菜单，在 **Group by** 里选一个属性（比如 `status`）。列会按该属性的值分出来。
+3. 列由 `latticeGroupBy` 决定。`Group by` 就在视图配置页里，而那个入口目前是藏起来的（见发现 21、28）
+   ⇒ **换分组属性现在只能改文件里的 `latticeGroupBy`**。
 4. **点一张卡片**：笔记应该出现在**右侧边栏**，边栏自动展开，而主区域的看板**原封不动**。
    再点另一张卡片，确认是**替换**抽屉里的内容，而不是又堆一个面板。
 5. **Cmd/Ctrl + 点卡片**：这次应该是主区域里的新标签页。
@@ -438,9 +455,9 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
 - `npm run build` —— 类型检查 + 打包通过，说明所有 API 签名都对得上
 - `npm run lint` —— 0 error
 - `npm run check:manifest` —— 全绿
-- `npm test` —— **97 条**断言全过（`description.test.ts` 30 条 + `grouping.test.ts` 48 条 +
+- `npm test` —— **105 条**断言全过（`description.test.ts` 30 条 + `grouping.test.ts` 48 条 +
   `board-properties.test.ts` 3 条 + `property-menu.test.ts` 4 条 + `view-menu.test.ts` 5 条 +
-  `search-scope.test.ts` 4 条 + `drawer-action.test.ts` 3 条）。运行器是
+  `search-scope.test.ts` 4 条 + `drawer-action.test.ts` 3 条 + `board-seed.test.ts` 8 条）。运行器是
   `scripts/test.mjs`：把 `src/**/*.test.ts` 用 esbuild 打成 ESM 丢进临时目录，再 `node --test` 跑；
   不引第三方框架。`grouping.test.ts` 收的是原先躺在 `/tmp` 的那批一次性断言（分组、移除、显式顺序、
   `moveColumn` 的边界、`reorderByDrop` 的全部 32 种落点）加上新增列的新用例 —— **`/tmp` 那份已经搬空**。
@@ -563,6 +580,20 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
   插件的设置读出来是 `{boardFile: 'lattice-board.base'}`，命令只有 `lattice:open-board`
   （旧那个 `lattice:open-view` 已经不在），设置页只有一条 **Board file**。
 - **新卡片落点（2026-10-03 新增）**：见发现 26，两列各自的 `+` 都落在 `lattice-cards/`。
+- **空白看板是加载时自己写出来的 —— 两次真机走通（2026-10-08 新增）。** 做法：把测试库复制到 `/tmp`，
+  在**副本**里删掉 `lattice-board.base`、把插件目录换成 `lattice-board`、删掉 `data.json`、把
+  `community-plugins.json` 指向新 id，`npm run deploy` 进副本，再配一份只指该副本的 `obsidian.json` +
+  独立 `--user-data-dir` + CDP 量：
+  ① 加载后文件出现，内容与 `BLANK_BOARD` 逐字相同，并弹出「wrote a blank board at "…"」；
+  ② 点 ribbon 图标 → `.bases-view` 从 0 变 1、`data-view-type="lattice-board"`、6 列
+  （`未分组` 109 张 + 库里那 5 个 `status` 值）、`Add column` 在、**每列列头都有 `+`**；
+  ③ 文件树那一行戴着 `lattice-hidden-file` 且 `getClientRects().length === 0`；
+  ④ **对照组（已存在的文件不被覆写）**：往文件尾追加一行标记，再 `disablePlugin` / `enablePlugin` →
+  标记还在、文件长度只多了那一行、`- type: lattice-board` 仍只出现 1 次；
+  ⑤ **带目录的路径**：把 **Board file** 改成 `boards/work.base` 再重载 → `boards/` 目录与
+  `boards/work.base` 都被建出来，内容同样是空白看板。
+  两次都是「先删掉文件、看它自己回来」，所以①③不是「本来就在那儿」的误读。
+
 
 **未验证，需要真机确认**：
 
@@ -580,9 +611,11 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
   要看 key 在不在。剩下待确认的是**重开视图后顺序是否还在**。
 - **列头按钮的点击会不会穿透到列本身。** 用了 `stopPropagation`，未实测。
 - **看板文件被改名或搬走之后，插件跟不上。** 设置里存的是**路径字符串**，不是文件引用：改名之后文件树
-  那一行会自己回来（新的路径没人藏），点图标则弹「no file at "lattice-board.base" to open as a board」。
-  要么在设置页里做个文件选择器，要么监听 `rename` 事件顺手改设置。另外**换一个看板**（设置指向别的
-  `.base`）也是同一个手动步骤，没做过。
+  那一行会自己回来（新的路径没人藏）。**2026-10-08 起这一条的后果变了**：旧路径已经没有文件，于是
+  加载时插件会在旧路径上**再写一份空白看板**（并弹一条 Notice）—— 比原来那句「no file at …」好懂，
+  但那块新板子是空壳，真正的板子（改名后那个）得自己在设置里指过去。要么在设置页里做个文件选择器，
+  要么监听 `rename` 事件顺手改设置。另外**换一个看板**（设置指向别的 `.base`）也是同一个手动步骤，
+  没做过。
 - **藏文件这件事只覆盖主窗口。** `document.head` / `document.body` 拿的是主窗口那一份，弹出式窗口有自己的
   文件树，那里面这一行不会藏（`property-menu.ts` 同样只覆盖主窗口）。要覆盖得多留一份 `<style>` 或每窗口
   各观察一遍，现在没做。另外**插件加载时文件树折叠着、或文件树面板根本没开**这两种起手也没单独量过 ——
@@ -900,6 +933,23 @@ npm test        # 纯函数断言（node:test + esbuild，无第三方框架）�
     也就是说 `layout-*` 那一族和核心的词汇是重叠的。另有一条环境事实：**1.12.4 的渲染进程里只有
     `app` / `Notice` / `moment` 是全局**，`setIcon` / `getIcon` / `getIconIds` 都不是，
     `require('obsidian')` 在插件沙箱外也取不到模块 —— 真机取证只能走 DOM。
+
+28. **`Group by` 只在被藏掉的视图菜单里 —— 藏入口顺手把「配置这块板子」也一起藏了（2026-10-08）。**
+    核心给插件视图渲染配置项的那一页是 `a$`（标题 `labelConfigureView()`）：`Group by`、两个开关、
+    属性顺序都在里面，而它**只有两个入口**，两个都在 `o$`（视图菜单）里 ——
+
+    ```js
+    // o$ 的构造：视图按钮自己
+    o.button.buttonEl.addEventListener("contextmenu", e => { ... r.show(new a$(r, t, false)) });
+    // o$.onOpen：菜单里每一行右侧那个 chevron-right
+    this.show(new r$(this).onNext(e => this.show(new a$(this, e, false))));
+    ```
+
+    ⇒ 这一页的 DOM 全部挂在 `.bases-toolbar-views-menu` 这个按钮的子树上，而它正是发现 21 里被 CSS
+    藏掉的那个按钮。**结论：看板上目前没有任何办法改 `Group by`，只能改 `.base` 文件。** 这也是
+    `board-seed.ts` 的种子必须自带 `latticeGroupBy` 的直接原因（不带的板子连 `Add column` 都不发，
+    见「看板文件、卡片文件夹、入口」）。**这一条只在发现 21 生效之后才成立** —— 视图入口放回来的那天，
+    它跟着作废。
 
 ## 下一步（按 wolai 差异点排序）
 

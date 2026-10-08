@@ -49,7 +49,9 @@ export class LatticeSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Board file')
-			.setDesc('The .base file the Lattice icon opens. It is kept out of the file explorer.')
+			.setDesc(
+				'The .base file the Lattice icon opens. It is kept out of the file explorer. A path with no file yet gets a blank board the next time the plugin loads.',
+			)
 			.addText((text) =>
 				text
 					.setPlaceholder(DEFAULT_SETTINGS.boardFile)

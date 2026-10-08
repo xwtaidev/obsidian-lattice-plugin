@@ -4,6 +4,7 @@ import { PropertyMenuHider } from './bases/property-menu';
 import { registerLatticeBasesView } from './bases/register';
 import { BoardViewAdder } from './bases/view-menu';
 import { BoardFileHider } from './board-file';
+import { seedBoardFile } from './board-seed';
 import { registerCommands } from './commands';
 import { LATTICE_ICON } from './constants';
 import { DEFAULT_SETTINGS, LatticeSettingTab, type LatticeSettings } from './settings';
@@ -48,6 +49,16 @@ export default class LatticePlugin extends Plugin {
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
+
+		// A vault that has just installed the plugin has no board file, and the
+		// icon is the only door to one — so the first load makes it. A file that
+		// is already there is left alone; see `board-seed.ts`.
+		if (await seedBoardFile(this.app.vault, this.settings.boardFile)) {
+			// Written into someone's vault, so it gets said out loud: a board
+			// that appears on its own is otherwise only explainable by reading
+			// the settings, and a file renamed away makes this fire again.
+			new Notice(`Lattice: wrote a blank board at "${this.settings.boardFile.trim()}".`);
+		}
 
 		this.propertyMenu.start();
 		this.register(() => this.propertyMenu.stop());
