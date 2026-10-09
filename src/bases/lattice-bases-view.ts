@@ -139,6 +139,29 @@ interface ColumnHit {
 }
 
 /**
+ * Which side of the column under the pointer a dragged column goes on.
+ *
+ * Almost always the half the pointer is in. The exception is the column that
+ * collects entries without a value: it is drawn last whatever the order list
+ * says, so there is no "after" it — a drop on its right half lands the dragged
+ * column in front of it, and the rule the board draws says so too.
+ */
+function dropSide(hit: ColumnHit): boolean {
+	return hit.el.classList.contains('is-pinned') ? false : hit.after;
+}
+
+/**
+ * Whether a column is the one the board keeps for entries without a value.
+ *
+ * `grouping.ts` decides that it is drawn last; everything about how it is
+ * drawn follows from that — no handle to drag it by, no place to put it in the
+ * column menu.
+ */
+function isPinned(column: LatticeColumn): boolean {
+	return column.value === null;
+}
+
+/**
  * A note's description, and what it was read from.
  *
  * Reading a note body is a disk read, and the board redraws on every change to
@@ -382,6 +405,11 @@ export class LatticeBasesView extends BasesView {
 		const columnEl = createDiv({ cls: 'lattice-column' });
 		const key = columnKey(column.value);
 		columnEl.dataset.value = key;
+		if (isPinned(column)) {
+			// A drag looks for somewhere to insert itself, and the class is how
+			// the drop tells that nothing goes after this column.
+			columnEl.addClass('is-pinned');
+		}
 
 		const header = columnEl.createDiv({ cls: 'lattice-column-header' });
 		this.renderColumnGrip(header, columnEl, column, key);
@@ -424,6 +452,12 @@ export class LatticeBasesView extends BasesView {
 	 * drags apart: a drag that begins on a card moves the card, a drag that
 	 * begins here moves the column, and neither can be mistaken for the other —
 	 * no guessing from where the pointer happens to be.
+	 *
+	 * The column that collects entries without a value is the exception, since
+	 * the board draws it last however the order list reads: it gets a pin where
+	 * the others get a handle. It keeps the header the same shape as the rest,
+	 * and a mark that says why it will not move is worth more than a grab
+	 * cursor that drags back to where it started.
 	 */
 	private renderColumnGrip(
 		header: HTMLElement,
@@ -431,10 +465,15 @@ export class LatticeBasesView extends BasesView {
 		column: LatticeColumn,
 		key: string,
 	): void {
-		const grip = header.createSpan({
-			cls: 'lattice-column-grip',
-			attr: { 'aria-label': `Reorder the "${column.label}" column` },
-		});
+		const grip = header.createSpan({ cls: 'lattice-column-grip' });
+		if (isPinned(column)) {
+			grip.addClass('is-pinned');
+			grip.setAttribute('aria-label', `The "${column.label}" column is always last`);
+			setIcon(grip, 'pin');
+			return;
+		}
+
+		grip.setAttribute('aria-label', `Reorder the "${column.label}" column`);
 		setIcon(grip, 'grip-vertical');
 		grip.draggable = true;
 
@@ -516,6 +555,23 @@ export class LatticeBasesView extends BasesView {
 		const last = columns.length - 1;
 		const menu = new Menu();
 
+		// The ungrouped column has nowhere to move to: the board draws it last
+		// however the order reads, so it is offered no moves at all rather than
+		// four that would do nothing.
+		if (isPinned(column)) {
+			menu.addItem((item) =>
+				item
+					.setTitle('Delete column')
+					.setIcon('trash-2')
+					.setWarning(true)
+					.onClick(() => {
+						void this.deleteColumn(column, groupBy);
+					}),
+			);
+			menu.showAtMouseEvent(event);
+			return;
+		}
+
 		menu.addItem((item) =>
 			item
 				.setTitle('Move left')
@@ -568,7 +624,15 @@ export class LatticeBasesView extends BasesView {
 	}
 
 	private applyColumnOrder(order: string[]): void {
-		this.config.set(OPTION_COLUMN_ORDER, order);
+		// The order lists the columns the user arranged. The ungrouped column is
+		// not one of them — where it is drawn is a rule, not a position — and its
+		// key is the empty string, which has no business in a `.base` file: it is
+		// there in files written before the column was pinned, and those files
+		// are exactly what the rule has to outrank.
+		this.config.set(
+			OPTION_COLUMN_ORDER,
+			order.filter((key) => key.length > 0),
+		);
 		this.render();
 	}
 
@@ -1164,7 +1228,7 @@ export class LatticeBasesView extends BasesView {
 				event.preventDefault();
 				transfer.dropEffect = 'move';
 				const hit = this.columnAt(board, event);
-				this.setColumnIndicator(hit?.el ?? null, hit?.after ?? false);
+				this.setColumnIndicator(hit?.el ?? null, hit !== null && dropSide(hit));
 				return;
 			}
 
@@ -1404,7 +1468,7 @@ export class LatticeBasesView extends BasesView {
 			return;
 		}
 
-		const next = reorderByDrop(keys, from, hovered, hit.after);
+		const next = reorderByDrop(keys, from, hovered, dropSide(hit));
 		// Dropped back where it started: leave the `.base` file untouched.
 		if (next.every((key, index) => key === keys[index])) {
 			return;

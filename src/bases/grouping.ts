@@ -118,7 +118,33 @@ export function buildColumns(
 	const derived = deriveColumns(entries, propertyId, isMissing, naming);
 	const removed = new Set(state.removed);
 	const kept = derived.filter((column) => !removed.has(columnKey(column.value)));
-	return applyOrder([...kept, ...addedColumns(kept, state.added, removed)], state.order);
+	return withNoValueLast(
+		applyOrder([...kept, ...addedColumns(kept, state.added, removed)], state.order),
+	);
+}
+
+/**
+ * The column that collects entries without a value is drawn last, whatever the
+ * data and the order list would otherwise make of it.
+ *
+ * Nobody chose its place: it is not a value anyone typed into a note, so it
+ * has no place in the order the values appear in — it used to land wherever
+ * the first entry without a value happened to fall, which is a position that
+ * moves as notes change and, in the middle of the values, reads as one of
+ * them. The end of the board is the one spot that reads as a decision, and it
+ * keeps the column where it can be ignored: it is the single column a board
+ * fills by itself.
+ *
+ * A board that groups on nothing has only this column, so there is nothing to
+ * move.
+ */
+function withNoValueLast(columns: LatticeColumn[]): LatticeColumn[] {
+	const pinned = columns.find((column) => column.value === null);
+	if (pinned === undefined || columns.at(-1) === pinned) {
+		return columns;
+	}
+
+	return [...columns.filter((column) => column !== pinned), pinned];
 }
 
 /**

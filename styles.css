@@ -89,6 +89,15 @@
 	color: var(--text-muted);
 }
 
+/* The ungrouped column is drawn last and stays there, so it carries a pin
+   rather than a handle: nothing about it invites a drag, not even the cursor.
+   It says why it will not move instead of pretending it might. */
+.lattice-column-grip.is-pinned,
+.lattice-column-grip.is-pinned:hover {
+	cursor: default;
+	color: var(--text-faint);
+}
+
 /* The far edge belongs to the actions, so name + count read as one label. */
 .lattice-column-actions {
 	display: flex;

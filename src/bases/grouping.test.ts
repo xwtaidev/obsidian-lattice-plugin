@@ -112,12 +112,14 @@ describe('removed columns', () => {
 describe('columns added by hand', () => {
 	it('draws a column for a value no note carries yet', () => {
 		const columns = buildColumns(entries, 'note.status', { ...none, added: ['Blocked'] });
-		assert.deepEqual(values(columns), ['Backlog', 'Doing', 'Done', null, 'Blocked']);
-		assert.equal(columns.at(-1)?.entries.length, 0);
+		// Before the ungrouped column: that one is drawn last, so a column added
+		// by hand — and the button that adds it — belong on this side of it.
+		assert.deepEqual(values(columns), ['Backlog', 'Doing', 'Done', 'Blocked', null]);
+		assert.equal(columns.at(-2)?.entries.length, 0);
 	});
 
 	it('calls that column by the value itself, since that is what it holds', () => {
-		assert.equal(buildColumns(entries, 'note.status', { ...none, added: ['Blocked'] }).at(-1)?.label, 'Blocked');
+		assert.equal(buildColumns(entries, 'note.status', { ...none, added: ['Blocked'] }).at(-2)?.label, 'Blocked');
 	});
 
 	it('does not draw a second column for a value the data already produces', () => {
@@ -200,6 +202,51 @@ describe('explicit order', () => {
 			added: [],
 		});
 		assert.deepEqual(values(after), ['Doing', 'Done', 'Backlog', null]);
+	});
+});
+
+describe('the ungrouped column', () => {
+	/** No value first, so the data alone would put the column at the front. */
+	const noValueFirst: BasesEntry[] = [entry(null), entry('Backlog'), entry('Doing')];
+
+	it('is drawn last even when the order list names it first', () => {
+		// Files written before the column was pinned hold the empty key in the
+		// order, and a drag of another column can still leave it there. The
+		// rule outranks it: what the board draws is not up for the file to say.
+		const columns = buildColumns(entries, 'note.status', {
+			order: ['', 'Done', 'Backlog'],
+			removed: [],
+			added: [],
+		});
+		assert.deepEqual(values(columns), ['Done', 'Backlog', 'Doing', null]);
+	});
+
+	it('is drawn last when the data alone would put it in the middle', () => {
+		// Where it used to land: wherever the first entry without a value fell.
+		const columns = buildColumns(noValueFirst, 'note.status', none);
+		assert.deepEqual(values(columns), ['Backlog', 'Doing', null]);
+	});
+
+	it('is drawn last however many columns follow it', () => {
+		const columns = buildColumns(noValueFirst, 'note.status', {
+			order: ['Doing'],
+			removed: [],
+			added: ['Blocked'],
+		});
+		assert.deepEqual(values(columns), ['Doing', 'Backlog', 'Blocked', null]);
+	});
+
+	it('stays deleted when it is deleted', () => {
+		// Removal is the user's wish and the pin is the board's default: the
+		// default must not overrule the wish by putting the column back.
+		const columns = buildColumns(entries, 'note.status', { ...none, removed: [''] });
+		assert.deepEqual(values(columns), ['Backlog', 'Doing', 'Done']);
+	});
+
+	it('is the only column of a board that groups on nothing, so the rule is a no-op', () => {
+		const columns = buildColumns(entries, null, none);
+		assert.deepEqual(values(columns), [null]);
+		assert.deepEqual(labels(columns), ['All notes']);
 	});
 });
 
