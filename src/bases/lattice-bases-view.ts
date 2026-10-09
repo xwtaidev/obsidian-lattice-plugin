@@ -29,6 +29,7 @@ import {
 	writablePropertyKey,
 	type ColumnNaming,
 	type ColumnState,
+	type CreationTime,
 	type LatticeColumn,
 	type MissingValue,
 } from './grouping';
@@ -160,6 +161,17 @@ function dropSide(hit: ColumnHit): boolean {
 function isPinned(column: LatticeColumn): boolean {
 	return column.value === null;
 }
+
+/**
+ * When the note behind an entry was created.
+ *
+ * `stat.ctime` rather than a `ctime` field on the file: `TFile` has a `stat`,
+ * and reading it is what the app documents. It has second resolution, which is
+ * the whole reason `orderByCreation` lets ties stand instead of breaking them
+ * with something else — notes made in the same second are not distinguished
+ * here, and pretending otherwise would put a card in a place nothing explains.
+ */
+const CREATION_TIME: CreationTime = (entry) => entry.file.stat.ctime;
 
 /**
  * The frontmatter key a new card in a column would be sorted by, if there is
@@ -390,6 +402,7 @@ export class LatticeBasesView extends BasesView {
 			},
 			IS_MISSING,
 			NAMING,
+			this.hasOwnSort() ? null : CREATION_TIME,
 		);
 
 		const board = root.createDiv({ cls: 'lattice-board-columns' });
@@ -400,6 +413,22 @@ export class LatticeBasesView extends BasesView {
 		this.drawnOrder = columns.map((column) => columnKey(column.value));
 
 		this.wireBoardDragAndDrop(board, groupBy, columns);
+	}
+
+	/**
+	 * Whether the board has a sort of its own.
+	 *
+	 * A sort is the user saying what order the cards go in, and a board with one
+	 * leaves that order alone: the query arrives presorted — the API says so —
+	 * and nothing here touches it. With none, nothing has been said, and the
+	 * fallback is creation order; see `orderByCreation` in `grouping.ts`.
+	 *
+	 * `getSort` is the documented way to ask. The sort is also readable as a
+	 * plain `sort` field on the config, but that is an implementation detail
+	 * this view has no business standing on.
+	 */
+	private hasOwnSort(): boolean {
+		return this.config.getSort().length > 0;
 	}
 
 	private readColumnState(): ColumnState {

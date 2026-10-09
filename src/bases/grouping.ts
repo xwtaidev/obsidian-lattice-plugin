@@ -102,6 +102,16 @@ export interface ColumnNaming {
 const PLAINLY_NAMED: ColumnNaming = { noValue: 'No value', allNotes: 'All notes' };
 
 /**
+ * When the note behind an entry was created, in milliseconds.
+ *
+ * Only the view has a file to read this off, and this module is kept free of
+ * the app so it can be exercised without one, so it is handed in — and handed
+ * in as `null` by a caller that has no business reordering anything, which is
+ * what "the board has a sort of its own" means.
+ */
+export type CreationTime = (entry: BasesEntry) => number;
+
+/**
  * Group entries by a property, then apply the user's column state.
  *
  * A multi-value property (tags, for instance) stringifies to a joined list, so
@@ -114,13 +124,40 @@ export function buildColumns(
 	state: ColumnState = EMPTY_COLUMN_STATE,
 	isMissing: MissingValue = PLAINLY_MISSING,
 	naming: ColumnNaming = PLAINLY_NAMED,
+	createdAt: CreationTime | null = null,
 ): LatticeColumn[] {
-	const derived = deriveColumns(entries, propertyId, isMissing, naming);
+	const source = createdAt === null ? entries : orderByCreation(entries, createdAt);
+	const derived = deriveColumns(source, propertyId, isMissing, naming);
 	const removed = new Set(state.removed);
 	const kept = derived.filter((column) => !removed.has(columnKey(column.value)));
 	return withNoValueLast(
 		applyOrder([...kept, ...addedColumns(kept, state.added, removed)], state.order),
 	);
+}
+
+/**
+ * The cards in the order their notes were created, oldest first.
+ *
+ * A board the user has not sorted hands the entries over in whatever order the
+ * query settled on, which is the notes' names. A note added to that board
+ * therefore lands wherever its name falls — `未命名` is drawn above `写一个很长
+ * 的标题` because of how the two read — and the `+` that made it looks broken:
+ * it says "a new card goes here" and the card turns up somewhere else.
+ * Creation order is the one reading that makes adding a card append it, and it
+ * is the reading a column already has when you pile cards onto it by hand.
+ *
+ * Ties keep the order they arrived in, which is why this sorts a copy with a
+ * plain `sort` rather than building a key that decides them: the timestamps
+ * have second resolution, so a batch import or a run of `+` clicks all share
+ * one, and within a second the name order the query gave is as good an answer
+ * as any. It also means the notes that were already there keep the order they
+ * were in, and only what is newer than them moves.
+ *
+ * An explicit `sort` in the `.base` is the user's own answer to this question,
+ * so the view passes `null` for `createdAt` and none of this runs.
+ */
+function orderByCreation(entries: BasesEntry[], createdAt: CreationTime): BasesEntry[] {
+	return [...entries].sort((a, b) => createdAt(a) - createdAt(b));
 }
 
 /**

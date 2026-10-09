@@ -11,6 +11,7 @@ import {
 	writablePropertyKey,
 	type ColumnNaming,
 	type ColumnState,
+	type CreationTime,
 	type LatticeColumn,
 } from './grouping';
 
@@ -503,6 +504,103 @@ describe('the reading the board passes in', () => {
 		assert.deepEqual(
 			restorableColumns(entries, 'note.status', { ...none, removed: [''] }, undefined, naming),
 			[{ key: '', label: '未分组' }],
+		);
+	});
+});
+
+/**
+ * A stand-in that also knows what its note is called and when it was made.
+ *
+ * `entry` above carries the one thing grouping reads. A card's place in a
+ * column is read off two more, and a test about places has to be able to say
+ * where a card ended up — two notes share a status, so the status cannot be the
+ * name of a card.
+ */
+function timed(name: string, value: string | null, ctime: number): BasesEntry {
+	return {
+		getValue: () => (value === null ? null : { toString: () => value }),
+		file: { basename: name, stat: { ctime } },
+	} as unknown as BasesEntry;
+}
+
+/** The reading the view hands in: when the note behind the entry was made. */
+const CREATED: CreationTime = (entry) => entry.file.stat.ctime;
+
+/** The cards of one column, as the names on them, in the order they are drawn. */
+function cardOrder(columns: LatticeColumn[], value: string | null): string[] {
+	const column = columns.find((candidate) => candidate.value === value);
+	return (column?.entries ?? []).map((entry) => entry.file.basename);
+}
+
+/** `buildColumns` as the view calls it: grouping on status, ordered by creation. */
+function boardOf(cards: BasesEntry[], createdAt: CreationTime | null = CREATED): LatticeColumn[] {
+	return buildColumns(cards, 'note.status', none, undefined, undefined, createdAt);
+}
+
+/**
+ * The question a board with no sort of its own cannot answer for itself.
+ *
+ * The entries arrive in the order the query settled on, which is the notes'
+ * names, so a note added to the board lands wherever its name falls and the `+`
+ * that made it looks broken. Nothing about the rule can be watched from outside
+ * the app — it is a comparison, and comparing the wrong pair puts a card one
+ * place away from where it was expected with nothing on screen to say so.
+ */
+describe('the order cards are drawn in', () => {
+	it('draws the newest card last, so one just made is appended', () => {
+		const columns = boardOf([
+			timed('old', 'Doing', 1000),
+			timed('new', 'Doing', 3000),
+			timed('middle', 'Doing', 2000),
+		]);
+		assert.deepEqual(cardOrder(columns, 'Doing'), ['old', 'middle', 'new']);
+	});
+
+	it('orders every column, not the board as a whole', () => {
+		// Nothing about the order within one column may depend on another: the
+		// entries are grouped first and each group is compared among itself.
+		const columns = boardOf([
+			timed('doing-late', 'Doing', 2000),
+			timed('backlog-late', 'Backlog', 4000),
+			timed('doing-early', 'Doing', 1000),
+			timed('backlog-early', 'Backlog', 3000),
+		]);
+		assert.deepEqual(cardOrder(columns, 'Doing'), ['doing-early', 'doing-late']);
+		assert.deepEqual(cardOrder(columns, 'Backlog'), ['backlog-early', 'backlog-late']);
+	});
+
+	it('orders the column that collects entries with no value too', () => {
+		const columns = boardOf([
+			timed('unfiled-late', null, 3000),
+			timed('unfiled-early', null, 1000),
+		]);
+		assert.deepEqual(cardOrder(columns, null), ['unfiled-early', 'unfiled-late']);
+	});
+
+	it('leaves notes made in the same second where the query put them', () => {
+		// The timestamps have second resolution, so a batch import or a run of
+		// `+` clicks all share one. Breaking the tie on anything else would
+		// invent a place for a card that nothing explains.
+		const asGiven = boardOf([timed('first', 'Doing', 1000), timed('second', 'Doing', 1000)]);
+		const reversed = boardOf([timed('second', 'Doing', 1000), timed('first', 'Doing', 1000)]);
+		assert.deepEqual(cardOrder(asGiven, 'Doing'), ['first', 'second']);
+		assert.deepEqual(cardOrder(reversed, 'Doing'), ['second', 'first']);
+	});
+
+	it('leaves the order alone when the board has a sort of its own', () => {
+		// What a `.base` with an explicit `sort` gets: the user has answered
+		// this question already, and their answer is not creation order.
+		const columns = boardOf([timed('late', 'Doing', 2000), timed('early', 'Doing', 1000)], null);
+		assert.deepEqual(cardOrder(columns, 'Doing'), ['late', 'early']);
+	});
+
+	it('does not disturb the array the view hands in', () => {
+		// The view passes the query's own array, which it goes on using.
+		const cards = [timed('late', 'Doing', 2000), timed('early', 'Doing', 1000)];
+		boardOf(cards);
+		assert.deepEqual(
+			cards.map((card) => card.file.basename),
+			['late', 'early'],
 		);
 	});
 });
