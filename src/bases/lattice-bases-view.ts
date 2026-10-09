@@ -888,6 +888,8 @@ export class LatticeBasesView extends BasesView {
 			}
 		}
 
+		this.renderCardDelete(card, entry);
+
 		card.addEventListener('dragstart', (event) => {
 			const transfer = event.dataTransfer;
 			if (transfer === null) {
@@ -919,6 +921,59 @@ export class LatticeBasesView extends BasesView {
 		});
 
 		return card;
+	}
+
+	/**
+	 * The way to delete the note, drawn on the card that stands for it.
+	 *
+	 * A card is a file, and the file explorer — where a file is otherwise
+	 * deleted — is somewhere else entirely, while the board is where the note is
+	 * being looked at when it turns out not to be worth keeping.
+	 *
+	 * It sits at the end of the title's first line and is shown on hover:
+	 * deleting is not what a card is for, and a bin on every card would make a
+	 * board read as a board of things about to be thrown away.
+	 */
+	private renderCardDelete(card: HTMLElement, entry: BasesEntry): void {
+		const button = card.createEl('button', {
+			cls: 'clickable-icon lattice-card-delete',
+			attr: { 'aria-label': `Delete "${entry.file.basename}"` },
+		});
+		setIcon(button, 'trash-2');
+		button.addEventListener('click', (event) => {
+			// A click on the card opens the note, and this button is inside the
+			// card. Only one of the two may happen: the click is the button's.
+			event.stopPropagation();
+			void this.deleteCard(entry);
+		});
+	}
+
+	/**
+	 * Delete the note a card stands for, once the user has said so.
+	 *
+	 * Nothing is redrawn here: the board is drawn from the results core handed
+	 * the view, a note that is gone is no longer one of them, and core hands
+	 * over the new results itself.
+	 */
+	private async deleteCard(entry: BasesEntry): Promise<void> {
+		const file = entry.file;
+		const confirmed = await ConfirmModal.open(this.app, {
+			title: `Delete "${file.basename}"?`,
+			// What happens to the file is the app's own setting, and it decides
+			// whether this can be undone. Saying "the trash" outright would be a
+			// promise the plugin cannot keep: that setting may well read
+			// "Permanently delete".
+			body:
+				`The note file is deleted, and its card leaves the board with it.` +
+				` Where it goes is what the app's "Deleted files" setting says — the trash, or nowhere at all.` +
+				` No other note is touched.`,
+			confirmText: 'Delete note',
+		});
+		if (!confirmed) {
+			return;
+		}
+
+		await this.app.fileManager.trashFile(file);
 	}
 
 	/**

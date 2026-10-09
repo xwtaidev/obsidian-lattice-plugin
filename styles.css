@@ -258,10 +258,26 @@
    line, and a line or two of properties, and at 8px of padding with 2px between
    lines the properties read as a grey block rather than as separate facts. */
 .lattice-card {
+	/* The card's own padding, named because the delete button is placed against
+	   it. An absolutely positioned box is measured from its container's padding
+	   box, so this one number is the whole distance from the card's content edge
+	   to the button — the border is already outside the box being measured
+	   from, and adding it here would put the button a pixel off. */
+	--lattice-card-padding: var(--size-4-3);
+	/* One title line, and the room the delete button needs: the button's box,
+	   and the clearance kept between it and the text that would otherwise run
+	   under it. The button and the gap reserved for it in the title are both
+	   measured from these, so the two cannot drift apart. `lh` is the line
+	   height itself rather than an em multiple of it, so it holds whatever a
+	   theme sets the line height to. */
+	--lattice-delete-line: 1lh;
+	--lattice-delete-size: var(--size-4-6);
+	--lattice-delete-clearance: var(--size-4-2);
+	position: relative; /* anchor for the delete button */
 	display: flex;
 	flex-direction: column;
 	gap: var(--size-4-2);
-	padding: var(--size-4-3);
+	padding: var(--lattice-card-padding);
 	border: 1px solid var(--background-modifier-border);
 	border-radius: var(--radius-m);
 	background-color: var(--background-primary);
@@ -274,6 +290,61 @@
 
 .lattice-card.is-dragging {
 	opacity: 0.5;
+}
+
+/* The card's way to delete its note, at the end of the title's first line and
+   shown while the card is under the pointer. A card is not a thing that invites
+   deletion, and a bin drawn on every card would make a board of them read as a
+   board of things about to be thrown away.
+
+   It sits on that line rather than floating over the card's corner: the title's
+   first line keeps clear of it, and the width it needs is held whether the
+   button is showing or not, so the title cannot pass underneath it and does not
+   rewrap when the pointer arrives. The room comes out of that one line only —
+   see the title's `::before` — so a title that wraps still gets the card's full
+   width on its second line.
+
+   Its box is a square the size a target is meant to be, centred on the line
+   rather than hung from the line's top: half the difference between the box
+   and the line is taken back off both ends. The font size and the line height
+   are borrowed from the title, because `lh` is measured with the element's own
+   type: a button left to itself has a smaller font (13px against 15px) and
+   would call a line 16.9px instead of the 19.5px the title is drawn at. */
+.lattice-card-delete {
+	position: absolute;
+	inset-block-start: calc(
+		var(--lattice-card-padding) -
+			(var(--lattice-delete-size) - var(--lattice-delete-line)) / 2
+	);
+	inset-inline-end: var(--lattice-card-padding);
+	font-size: inherit;
+	line-height: var(--line-height-tight);
+	inline-size: var(--lattice-delete-size);
+	block-size: var(--lattice-delete-size);
+	padding: 0;
+	--icon-size: var(--icon-s);
+	cursor: pointer;
+	color: var(--text-muted);
+	opacity: 0;
+}
+
+.lattice-card:hover .lattice-card-delete,
+.lattice-card-delete:focus-visible {
+	opacity: 1;
+}
+
+/* Shown on focus as well, since a button that only a pointer can find is one
+   the keyboard cannot: tabbing to it must reveal it. And shown outright where
+   there is no hover to reveal it — a touch screen would otherwise carry a
+   button no one can reach. */
+.lattice-card-delete:hover {
+	color: var(--text-error);
+}
+
+@media (hover: none) {
+	.lattice-card-delete {
+		opacity: 1;
+	}
 }
 
 /* The place a dragged card is about to go, drawn in the column it is over.
@@ -313,6 +384,20 @@
 	flex-direction: column;
 	gap: var(--size-4-1);
 	min-width: 0;
+}
+
+/* A float standing where the delete button is, so the first line of the title
+   stops short of it. A float rather than a row holding title and button side by
+   side: a row narrows every line of the title, and a title that just fit in two
+   lines then needs three. This way the room is taken from the line that would
+   run under the button and from no other. It is a pseudo-element rather than
+   the button itself because it is only a gap — the button is drawn over it, out
+   of the flow, by the card. */
+.lattice-card-title::before {
+	content: '';
+	float: right;
+	inline-size: calc(var(--lattice-delete-size) + var(--lattice-delete-clearance));
+	block-size: var(--lattice-delete-line);
 }
 
 .lattice-card-title {
