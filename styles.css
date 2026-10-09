@@ -126,6 +126,39 @@
 	min-height: var(--size-4-4);
 }
 
+/* The other way into a column: the strip under the last card.
+   It stretches, so its hover state covers the whole width of the column and
+   reads as "the end of the list" rather than as one more chip beside the name.
+   `height: auto` for the reason the Add column button needs it — Obsidian's
+   global button rule pins every button to `height: var(--input-height)`, which
+   here would be a 30px slab of its own grey across the bottom of the column.
+   The card surface without a card's border-radius loudness: it is the shape a
+   card would be, and hollow, because nothing is in it yet. */
+.lattice-card-add {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+	height: auto;
+	padding: var(--size-4-2);
+	border: 1px solid transparent;
+	border-radius: var(--radius-m);
+	background-color: var(--background-primary);
+	box-shadow: none;
+	color: var(--text-faint);
+}
+
+.lattice-card-add:hover {
+	border-color: var(--background-modifier-border-hover);
+	color: var(--text-normal);
+}
+
+.lattice-card-add-icon {
+	display: flex;
+	align-items: center;
+	--icon-size: var(--icon-s);
+}
+
 /* The column that is not there yet.
    The same box as a column — same padding, same border, same radius — so its
    label sits on the header line it belongs to and reads as the next column

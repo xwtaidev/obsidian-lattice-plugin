@@ -162,6 +162,20 @@ function isPinned(column: LatticeColumn): boolean {
 }
 
 /**
+ * The frontmatter key a new card in a column would be sorted by, if there is
+ * one to write.
+ *
+ * Two ways to have none: a board that is not grouping on anything has no
+ * column to put a note in, and a property that is derived (`file.name`,
+ * `formula.x`) has no frontmatter to put it in. Both mean the same thing to a
+ * new card — there is nothing this board could say about it — so both buttons
+ * that make one are offered on the same terms.
+ */
+function cardTargetKey(groupBy: BasesPropertyId | null): string | null {
+	return groupBy === null ? null : writablePropertyKey(groupBy);
+}
+
+/**
  * A note's description, and what it was read from.
  *
  * Reading a note body is a disk read, and the board redraws on every change to
@@ -426,6 +440,7 @@ export class LatticeBasesView extends BasesView {
 		for (const entry of column.entries) {
 			cards.appendChild(this.renderCard(entry, groupBy, key));
 		}
+		this.renderNewCardFooter(columnEl, column, groupBy);
 
 		return columnEl;
 	}
@@ -506,7 +521,7 @@ export class LatticeBasesView extends BasesView {
 		column: LatticeColumn,
 		groupBy: BasesPropertyId | null,
 	): void {
-		const key = groupBy === null ? null : writablePropertyKey(groupBy);
+		const key = cardTargetKey(groupBy);
 		if (key === null) {
 			// A derived column has nothing to write, so do not offer the button.
 			return;
@@ -517,6 +532,41 @@ export class LatticeBasesView extends BasesView {
 			attr: { type: 'button', 'aria-label': `New note in ${column.label}` },
 		});
 		setIcon(button, 'plus');
+		button.addEventListener('click', (event) => {
+			// Otherwise the click reaches the column behind the button.
+			event.stopPropagation();
+			void this.createCard(key, column.value);
+		});
+	}
+
+	/**
+	 * The other way into a column: the strip under the last card.
+	 *
+	 * The header's `+` is only reachable while the top of the column is on
+	 * screen, which stops being true as soon as a column holds more than the
+	 * board's height. This one is at the end of the list, which is also where
+	 * the note it makes will land, so the two agree about where "new" means.
+	 *
+	 * A strip rather than a card-shaped box: it is not a card, and a dashed or
+	 * filled one would read as an empty card waiting to be filled in. It stays
+	 * out of `.lattice-column-cards` as well, so the drop slot measures cards
+	 * and nothing else.
+	 */
+	private renderNewCardFooter(
+		parent: HTMLElement,
+		column: LatticeColumn,
+		groupBy: BasesPropertyId | null,
+	): void {
+		const key = cardTargetKey(groupBy);
+		if (key === null) {
+			return;
+		}
+
+		const button = parent.createEl('button', {
+			cls: 'lattice-card-add',
+			attr: { type: 'button', 'aria-label': `New note in ${column.label}` },
+		});
+		setIcon(button.createSpan({ cls: 'lattice-card-add-icon' }), 'plus');
 		button.addEventListener('click', (event) => {
 			// Otherwise the click reaches the column behind the button.
 			event.stopPropagation();
