@@ -1,7 +1,7 @@
 {
 	"id": "lattice-board",
 	"name": "Lattice Board",
-	"version": "0.1.1",
+	"version": "0.2.0",
 	"minAppVersion": "1.10.2",
 	"description": "A kanban board of your notes. Columns are the values of a property, cards are notes, and dragging a card into a column writes that value back to the note.",
 	"author": "xwtaidev",
